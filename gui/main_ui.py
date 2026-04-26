@@ -481,12 +481,12 @@ def build_main_ui(root: Any, project_root: str) -> None:
             "card-soft runtime-panel runtime-summary runtime-summary-card runtime-health w-full shadow-sm rounded-lg"
         ):
             with ui.row().classes(
-                "w-full items-center justify-between q-px-sm bg-slate-50 border-b border-slate-100"
+                "w-full items-center justify-between q-px-xs bg-slate-50 border-b border-slate-100"
             ):
                 with ui.row().classes("items-center gap-1"):
                     ui.icon("monitor_heart", color="primary").classes("text-sm")
                     ui.label("System Health").classes(
-                        "text-[10px] font-black text-slate-500 uppercase tracking-tighter"
+                        "text-sm font-black text-slate-500 uppercase tracking-tighter"
                     )
 
                 refresh_health_btn = (
@@ -558,14 +558,14 @@ def build_main_ui(root: Any, project_root: str) -> None:
 
             # Error Label
             health_missing = ui.label("").classes(
-                "w-full q-px-sm text-[12px] text-rose-600 italic"
+                "w-full q-px-xs text-[11px] text-rose-600 italic"
             )
 
         with ui.card().classes(
             "card-soft runtime-panel runtime-summary runtime-summary-card runtime-queue w-full shadow-sm rounded-lg"
         ):
             with ui.row().classes(
-                "w-full items-center justify-between q-px-sm bg-slate-50 border-b border-slate-100"
+                "w-full items-center justify-between q-px-xs bg-slate-50 border-b border-slate-100"
             ):
                 with ui.row().classes("items-center gap-1"):
                     ui.icon("memory", color="primary").classes("text-sm")
@@ -656,7 +656,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
             "card-soft runtime-panel runtime-summary runtime-summary-card runtime-tuner w-full shadow-sm rounded-lg"
         ):
             with ui.row().classes(
-                "w-full items-center q-px-sm bg-slate-50 border-b border-slate-100 gap-1"
+                "w-full items-center q-px-xs bg-slate-50 border-b border-slate-100 gap-1"
             ):
                 ui.icon("settings_input_component", color="primary").classes("text-sm")
                 ui.label("Tuner Live").classes(
@@ -664,7 +664,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                 )
 
                 # Row 1: GPU, mode, hot stage
-            with ui.grid(columns=3).classes("w-full gap-1 q-pa-xs"):
+            with ui.grid(columns=3).classes("w-full gap-1 q-pa-none"):
                 # GPU Usage
                 with ui.row().classes(
                     "items-center justify-between q-px-xs border border-indigo-100 rounded bg-indigo-50/30"
@@ -691,7 +691,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                     )
 
                 # Rows 2-3: queue and permit mini-badges
-            with ui.column().classes("w-full q-pa-xs gap-1"):
+            with ui.column().classes("w-full q-pa-none gap-1"):
                 # Q Series
                 with ui.grid(columns=4).classes("w-full gap-1"):
                     with ui.row().classes(
@@ -985,7 +985,9 @@ def build_main_ui(root: Any, project_root: str) -> None:
                         )
 
                 # Log viewer
-                with ui.element("div").classes("runtime-console-body w-full bg-[#1e1e1e] p-3"):
+                with ui.element("div").classes(
+                    "runtime-console-body w-full bg-[#1e1e1e] p-3"
+                ):
                     log_view = ui.log(max_lines=1200).classes(
                         "w-full h-full font-mono text-[11px] text-emerald-400 bg-transparent no-shadow leading-relaxed"
                     )
@@ -1007,7 +1009,9 @@ def build_main_ui(root: Any, project_root: str) -> None:
                         .classes("text-xs font-bold")
                     )
 
-                with ui.column().classes("runtime-preview-body w-full q-pa-none") as preview_body:
+                with ui.column().classes(
+                    "runtime-preview-body w-full q-pa-none"
+                ) as preview_body:
                     build_preview_container(preview_dom_id)
                 preview_meta = _NoopText()
                 preview_expansion = _SideCollapseController(
@@ -1018,7 +1022,9 @@ def build_main_ui(root: Any, project_root: str) -> None:
                 )
                 preview_expansion.set_value(bool(defaults["preview_enabled"]))
                 preview_toggle_btn.on_click(
-                    lambda: preview_expansion.set_value(not bool(preview_expansion.value))
+                    lambda: preview_expansion.set_value(
+                        not bool(preview_expansion.value)
+                    )
                 )
         # Output gallery
         with ui.expansion("Output Gallery", icon="photo_library", value=False).classes(
@@ -1205,12 +1211,13 @@ def register_ui_assets() -> None:
             grid-column: auto;
             order: 1;
             height: 100%;
-            min-height: 188px;
+            min-height: 118px;
+            align-self: stretch;
           }
           .runtime-summary-card .summary-header {
-            min-height: 30px;
-            padding: 2px 4px;
-            margin-bottom: 4px;
+            min-height: 26px;
+            padding: 1px 3px;
+            margin-bottom: 2px;
           }
           .runtime-summary-card .summary-header .q-icon {
             font-size: 1rem !important;
@@ -1222,7 +1229,7 @@ def register_ui_assets() -> None:
             gap: 4px;
           }
           .runtime-summary-card .q-card__section {
-            padding: 4px 6px;
+            padding: 2px 4px;
           }
           .runtime-workspace > .runtime-health { order: 1; }
           .runtime-workspace > .runtime-queue { order: 2; }
