@@ -239,14 +239,14 @@ def build_main_ui(root: Any, project_root: str) -> None:
                 self._body.classes(remove="hidden")
                 self._header_lead.classes(remove="hidden")
                 self._title_label.classes(remove="hidden")
-                self._toggle_button.set_text("</>")
+                self._toggle_button.set_text("<")
                 self._toggle_button.tooltip("Collapse preview")
             else:
                 self._panel.classes(add="is-collapsed")
                 self._body.classes(add="hidden")
                 self._header_lead.classes(add="hidden")
                 self._title_label.classes(add="hidden")
-                self._toggle_button.set_text("</>")
+                self._toggle_button.set_text("<")
                 self._toggle_button.tooltip("Expand preview")
 
     with root:
@@ -268,7 +268,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
             "Project Settings",
             icon="tune",
             value=True,
-        ).classes("card-soft settings-panel w-full"):
+        ).classes("card-soft settings-panel settings-shell w-full"):
             with ui.grid(columns=1).classes("w-full gap-3"):
                 default_format = (
                     "image" if defaults["format"] not in {"video", "2"} else "video"
@@ -332,7 +332,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
             "Processing Settings",
             icon="tune",
             value=True,
-        ).classes("card-soft settings-panel w-full"):
+        ).classes("card-soft settings-panel settings-shell w-full"):
             with ui.grid(columns=2).classes("w-full gap-3"):
                 workers_per_stage = ui.number(
                     "Workers/Stage", value=defaults["workers_per_stage"], min=1, max=128
@@ -379,7 +379,9 @@ def build_main_ui(root: Any, project_root: str) -> None:
             "Stage Controls",
             icon="settings_input_component",
             value=True,
-        ).classes("card-soft settings-panel w-full shadow-md text-primary"):
+        ).classes(
+            "card-soft settings-panel settings-shell w-full shadow-md text-primary"
+        ):
 
             with ui.grid(columns=3).classes(
                 "settings-panel w-full gap-x-8 gap-y-2 items-center bg-white p-4 rounded-lg border border-slate-200"
@@ -487,7 +489,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
             "card-soft runtime-panel runtime-summary runtime-summary-card runtime-health w-full shadow-sm rounded-lg"
         ):
             with ui.row().classes(
-                "w-full items-center justify-between q-px-sm bg-slate-50 border-b border-slate-100"
+                "panel-header panel-header-compact w-full items-center justify-between"
             ):
                 with ui.row().classes("items-center gap-1"):
                     ui.icon("monitor_heart", color="primary").classes("text-sm")
@@ -502,7 +504,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                 )
 
             # Main content container
-            with ui.column().classes("w-full q-pa-none gap-1"):
+            with ui.column().classes("panel-body panel-body-compact w-full gap-1"):
 
                 # Top row: models, FFmpeg, TensorRT
                 with ui.grid(columns=3).classes("w-full q-pa-none gap-1"):
@@ -571,7 +573,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
             "card-soft runtime-panel runtime-summary runtime-summary-card runtime-queue w-full shadow-sm rounded-lg"
         ):
             with ui.row().classes(
-                "w-full items-center justify-between q-px-sm bg-slate-50 border-b border-slate-100"
+                "panel-header panel-header-compact w-full items-center justify-between"
             ):
                 with ui.row().classes("items-center gap-1"):
                     ui.icon("memory", color="primary").classes("text-sm")
@@ -582,7 +584,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                     "flat dense size=sm"
                 )
 
-            with ui.column().classes("w-full q-pa-none gap-1"):
+            with ui.column().classes("panel-body panel-body-compact w-full gap-1"):
                 # Top row: media types
                 with ui.grid(columns=3).classes("w-full gap-1"):
                     # Image Jobs
@@ -662,7 +664,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
             "card-soft runtime-panel runtime-summary runtime-summary-card runtime-tuner w-full shadow-sm rounded-lg"
         ):
             with ui.row().classes(
-                "w-full items-center q-px-sm bg-slate-50 border-b border-slate-100 gap-1"
+                "panel-header panel-header-compact w-full items-center gap-1"
             ):
                 ui.icon("settings_input_component", color="primary").classes("text-sm")
                 ui.label("Tuner Live").classes(
@@ -670,7 +672,9 @@ def build_main_ui(root: Any, project_root: str) -> None:
                 )
 
                 # Row 1: GPU, mode, hot stage
-            with ui.grid(columns=3).classes("w-full gap-1 q-pa-xs"):
+            with ui.grid(columns=3).classes(
+                "panel-body panel-body-compact w-full gap-1"
+            ):
                 # GPU Usage
                 with ui.row().classes(
                     "items-center justify-between q-px-xs border border-indigo-100 rounded bg-indigo-50/30"
@@ -697,7 +701,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                     )
 
                 # Rows 2-3: queue and permit mini-badges
-            with ui.column().classes("w-full q-pa-xs gap-1"):
+            with ui.column().classes("panel-body panel-body-compact w-full gap-1"):
                 # Q Series
                 with ui.grid(columns=4).classes("w-full gap-1"):
                     with ui.row().classes(
@@ -770,7 +774,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
         ):
             # Subtle header keeps the charts visually grouped.
             with ui.row().classes(
-                "w-full items-center gap-2 q-px-sm q-py-xs bg-slate-50 border-b border-slate-100"
+                "panel-header panel-header-compact w-full items-center gap-2"
             ):
                 ui.icon("show_chart", color="primary").classes("text-sm")
                 ui.label("Performance Charts").classes(
@@ -781,7 +785,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
             with ui.grid(columns=3).classes("w-full gap-0 divide-x divide-slate-100"):
 
                 # --- Chart 1: GPU ---
-                with ui.column().classes("w-full q-pa-xs"):
+                with ui.column().classes("panel-body panel-body-compact w-full"):
                     gpu_chart = ui.echart(
                         {
                             "animation": False,
@@ -814,7 +818,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                     ).classes("w-full h-24")
 
                 # --- Chart 2: Queue ---
-                with ui.column().classes("w-full q-pa-xs"):
+                with ui.column().classes("panel-body panel-body-compact w-full"):
                     queue_chart = ui.echart(
                         {
                             "animation": False,
@@ -861,7 +865,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                     ).classes("w-full h-24")
 
                 # --- Chart 3: Permit ---
-                with ui.column().classes("w-full q-pa-xs"):
+                with ui.column().classes("panel-body panel-body-compact w-full"):
                     permit_chart = ui.echart(
                         {
                             "animation": False,
@@ -967,7 +971,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
             ):
                 # Console Header
                 with ui.row().classes(
-                    "w-full items-center justify-between bg-slate-100 q-px-md border-b border-slate-200"
+                    "panel-header w-full items-center justify-between"
                 ):
                     with ui.row().classes("items-center gap-2"):
                         ui.icon("terminal", color="slate-700").classes("text-lg")
@@ -992,7 +996,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
 
                 # Log viewer
                 with ui.element("div").classes(
-                    "runtime-console-body w-full bg-[#1e1e1e] p-3"
+                    "panel-body runtime-console-body w-full bg-[#1e1e1e]"
                 ):
                     log_view = ui.log(max_lines=1200).classes(
                         "w-full h-full font-mono text-[11px] text-emerald-400 bg-transparent no-shadow leading-relaxed"
@@ -1002,22 +1006,24 @@ def build_main_ui(root: Any, project_root: str) -> None:
                 "card-soft runtime-preview runtime-preview-side shadow-sm rounded-xl overflow-hidden q-pa-none"
             ) as preview_panel:
                 with ui.row().classes(
-                    "runtime-preview-header w-full items-center justify-between bg-slate-100 q-px-sm border-b border-slate-200"
+                    "panel-header runtime-preview-header w-full items-center justify-between"
                 ):
-                    with ui.row().classes("runtime-preview-lead items-center gap-2") as preview_header_lead:
+                    with ui.row().classes(
+                        "runtime-preview-lead items-center gap-2"
+                    ) as preview_header_lead:
                         ui.icon("visibility", color="slate-700").classes("text-lg")
                         preview_title = ui.label("Live Preview").classes(
                             "runtime-preview-title text-sm font-bold text-slate-700"
                         )
                     preview_toggle_btn = (
-                        ui.button("</>", color="secondary")
+                        ui.button("<", color="secondary")
                         .props("flat dense")
                         .classes("runtime-preview-toggle text-slate-600")
                         .tooltip("Collapse preview")
                     )
 
                 with ui.column().classes(
-                    "runtime-preview-body w-full q-pt-none q-px-xs q-pb-sm"
+                    "panel-body runtime-preview-body w-full"
                 ) as preview_body:
                     build_preview_container(preview_dom_id)
                 preview_meta = _NoopText()
@@ -1039,7 +1045,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
             "w-full card-soft shadow-sm rounded-xl font-bold bg-white border border-slate-200"
         ):
 
-            with ui.column().classes("w-full q-pa-sm gap-2 font-normal"):
+            with ui.column().classes("panel-body w-full gap-2 font-normal"):
                 with ui.row().classes("w-full items-center justify-between"):
                     gallery_status = ui.label("No output yet").classes(
                         "text-xs text-slate-500 italic"
@@ -1136,21 +1142,38 @@ def register_ui_assets() -> None:
     ui.add_head_html(
         """
         <style>
+          :root {
+            --q1-space-1: 4px;
+            --q1-space-2: 8px;
+            --q1-space-3: 12px;
+            --q1-space-4: 16px;
+            --q1-radius-sm: 8px;
+            --q1-radius-md: 12px;
+            --q1-border: #e2e8f0;
+            --q1-border-soft: #eef2f7;
+            --q1-surface: rgba(255, 255, 255, 0.96);
+            --q1-surface-muted: #f8fafc;
+            --q1-shadow-sm: 0 6px 18px rgba(15, 23, 42, 0.05);
+            --q1-shadow-md: 0 12px 30px rgba(15, 23, 42, 0.10);
+            --q1-header-height: 38px;
+            --q1-summary-height: 164px;
+            --q1-runtime-height: 460px;
+          }
           .app-shell {
             background: #f6f8fb;
             min-height: 100vh;
             display: block !important;
-            padding: 12px !important;
+            padding: var(--q1-space-3) !important;
           }
           .app-header {
             position: sticky;
             top: 0;
             z-index: 20;
             width: 100%;
-            padding: 10px 12px;
-            margin-bottom: 12px;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
+            padding: 10px var(--q1-space-3);
+            margin-bottom: var(--q1-space-3);
+            border: 1px solid var(--q1-border);
+            border-radius: var(--q1-radius-md);
             background: rgba(255, 255, 255, 0.92);
             backdrop-filter: blur(14px);
           }
@@ -1158,14 +1181,14 @@ def register_ui_assets() -> None:
             width: 100%;
             display: grid;
             grid-template-columns: minmax(360px, 420px) minmax(0, 1fr);
-            gap: 10px;
+            gap: var(--q1-space-3);
             align-items: start;
           }
           .settings-rail,
           .runtime-workspace {
             min-width: 0;
           }
-          .settings-rail { gap: 12px; }
+          .settings-rail { gap: var(--q1-space-3); }
           .settings-rail {
             display: flex;
             flex-direction: column;
@@ -1173,7 +1196,7 @@ def register_ui_assets() -> None:
           .runtime-workspace {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 8px;
+            gap: var(--q1-space-3);
             align-items: stretch;
           }
           .settings-rail {
@@ -1181,7 +1204,7 @@ def register_ui_assets() -> None:
             top: 86px;
             max-height: calc(100vh - 100px);
             overflow-y: auto;
-            padding-right: 4px;
+            padding-right: var(--q1-space-2);
           }
           .runtime-workspace {
             min-height: calc(100vh - 100px);
@@ -1190,13 +1213,26 @@ def register_ui_assets() -> None:
           .runtime-panel {
             width: 100%;
           }
+          .settings-shell {
+            overflow: visible;
+          }
+          .settings-shell .q-expansion-item__container {
+            background: var(--q1-surface);
+          }
+          .settings-shell .q-item {
+            min-height: var(--q1-header-height);
+            padding: 0 var(--q1-space-3);
+          }
+          .settings-shell .q-expansion-item__content {
+            padding: var(--q1-space-2) var(--q1-space-3) var(--q1-space-3);
+          }
           .action-strip {
             position: sticky;
             bottom: 0;
             z-index: 15;
-            padding: 6px 8px;
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
+            padding: var(--q1-space-2);
+            border: 1px solid var(--q1-border);
+            border-radius: var(--q1-radius-md);
             background: rgba(255, 255, 255, 0.94);
             backdrop-filter: blur(12px);
           }
@@ -1204,27 +1240,47 @@ def register_ui_assets() -> None:
             max-width: none !important;
             margin-left: 0 !important;
             margin-right: 0 !important;
-            border: 1px solid #e2e8f0;
-            border-radius: 7px;
-            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+            border: 1px solid var(--q1-border);
+            border-radius: var(--q1-radius-md);
+            box-shadow: var(--q1-shadow-sm);
+            background: var(--q1-surface);
           }
           .runtime-workspace .q-card {
             min-height: 0;
           }
           .runtime-workspace .q-card .q-card {
-            border-radius: 6px;
+            border-radius: var(--q1-radius-sm);
+          }
+          .panel-header {
+            min-height: var(--q1-header-height);
+            padding: 0 var(--q1-space-3);
+            background: var(--q1-surface-muted);
+            border-bottom: 1px solid var(--q1-border-soft);
+          }
+          .panel-header-compact {
+            min-height: 34px;
+            padding: 0 var(--q1-space-2);
+          }
+          .panel-body {
+            padding: var(--q1-space-3);
+          }
+          .panel-body-compact {
+            padding: var(--q1-space-2);
+          }
+          .runtime-preview-body {
+            padding: var(--q1-space-1);
           }
           .runtime-workspace > .runtime-panel { grid-column: 1 / -1; order: 20; }
           .runtime-workspace > .runtime-summary {
             grid-column: auto;
             order: 1;
             height: 100%;
-            min-height: 188px;
+            min-height: var(--q1-summary-height);
           }
           .runtime-summary-card .summary-header {
-            min-height: 30px;
-            padding: 2px 4px;
-            margin-bottom: 4px;
+            min-height: 0;
+            padding: 0;
+            margin-bottom: 0;
           }
           .runtime-summary-card .summary-header .q-icon {
             font-size: 1rem !important;
@@ -1236,7 +1292,7 @@ def register_ui_assets() -> None:
             gap: 4px;
           }
           .runtime-summary-card .q-card__section {
-            padding: 4px 6px;
+            padding: 0;
           }
           .runtime-workspace > .runtime-health { order: 1; }
           .runtime-workspace > .runtime-queue { order: 2; }
@@ -1248,7 +1304,7 @@ def register_ui_assets() -> None:
           .runtime-console-preview-row > .runtime-console {
             flex: 1 1 0;
             min-width: 0;
-            height: 352px;
+            height: var(--q1-runtime-height);
             display: flex;
             flex-direction: column;
           }
@@ -1256,7 +1312,7 @@ def register_ui_assets() -> None:
             flex: 1 1 0;
             min-width: 0;
             max-width: none;
-            height: 352px;
+            height: var(--q1-runtime-height);
             display: flex;
             flex-direction: column;
             transition: none;
@@ -1283,6 +1339,9 @@ def register_ui_assets() -> None:
             margin-left: auto;
             flex: 0 0 auto;
             align-self: center;
+            min-width: 34px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
           }
           .runtime-console-preview-row > .runtime-preview-side.is-collapsed {
             flex: 0 0 52px;

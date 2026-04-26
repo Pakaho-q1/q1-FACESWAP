@@ -352,8 +352,35 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
         )
         return latest_health_report
 
-    def scan_selected_status() -> dict[str, int]:
-        return scan_selected_job_status(
+    status_cache: dict[str, Any] = {
+        "key": None,
+        "value": {"total": 0, "done": 0, "planned": 0, "running": 0, "failed": 0},
+        "ts": 0.0,
+    }
+
+    def _status_cache_key() -> tuple[Any, ...]:
+        return (
+            str(format_select.value or "image").lower(),
+            str(input_path.value or "").strip(),
+            str(output_path.value or "").strip(),
+            str(defaults.get("output_suffix", "") or ""),
+            bool(controller.state.running),
+            int(failed_counts.get("image", 0)),
+            int(failed_counts.get("video", 0)),
+        )
+
+    def scan_selected_status(force: bool = False) -> dict[str, int]:
+        key = _status_cache_key()
+        now = time.monotonic()
+        refresh_s = 2.5 if bool(controller.state.running) else 5.0
+        if (
+            not force
+            and status_cache["key"] == key
+            and (now - float(status_cache["ts"])) < refresh_s
+        ):
+            return dict(status_cache["value"])
+
+        value = scan_selected_job_status(
             selected_format=str(format_select.value or "image"),
             input_path_value=str(input_path.value or ""),
             output_path_value=str(output_path.value or ""),
@@ -361,9 +388,13 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
             failed_counts=failed_counts,
             controller_running=bool(controller.state.running),
         )
+        status_cache["key"] = key
+        status_cache["value"] = dict(value)
+        status_cache["ts"] = now
+        return value
 
-    def update_job_queue_status() -> None:
-        status = scan_selected_status()
+    def update_job_queue_status(force: bool = False) -> None:
+        status = scan_selected_status(force=force)
         queue_planned_status.set_text(str(status["planned"]))
         queue_running_status.set_text(str(status["running"]))
         queue_done_status.set_text(str(status["done"]))
@@ -378,8 +409,8 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
         selected_fmt = str(format_select.value or "image").lower()
         selected_count = planned_counts["video"] if selected_fmt == "video" else planned_counts["image"]
         queue_selected.set_text(str(selected_count))
-        update_job_queue_status()
-        status = scan_selected_status()
+        update_job_queue_status(force=True)
+        status = scan_selected_status(force=False)
         queue_hint.set_text(
             f"Input scan: images={planned_counts['image']} videos={planned_counts['video']} (format={selected_fmt}) | done={status['done']} pending={status['planned']}"
         )
@@ -536,7 +567,7 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
             store.last_progress_ts = now
 
         elapsed = max(0.0, now - (store.processing_started_at if store.processing_started_at > 0 else store.run_started_at))
-        fallback_remaining = scan_selected_status()["planned"]
+        fallback_remaining = scan_selected_status(force=False)["planned"]
         t = compute_throughput(
             progress_units_done=store.progress_units_done,
             progress_units_total=store.progress_units_total,
@@ -558,7 +589,7 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
         )
         store.progress_units_done = progress_units_done
         store.progress_units_total = progress_units_total
-        update_job_queue_status()
+        update_job_queue_status(force=True)
         update_throughput()
 
     def validate_form_inline() -> bool:

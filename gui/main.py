@@ -36,7 +36,7 @@ except ImportError:
 
 def build_page() -> None:
     ui.dark_mode(False)
-    ui.page_title("Q1 FaceSwap GUI")
+    ui.page_title("q1-FaceSwap")
     register_ui_assets()
 
     requires_project = detect_requires_project_path()
@@ -123,4 +123,4 @@ if __name__ in {"__main__", "__mp_main__"}:
         import asyncio
 
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    ui.run(title="Q1 FaceSwap GUI", reload=True)
+    ui.run(title="q1-FaceSwap", reload=True)
