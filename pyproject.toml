@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "q1-faceswap"
+version = "0.1.0"
+description = "Q1 FaceSwap pipeline library and CLI adapter"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Proprietary" }
+authors = [{ name = "Q1 FaceSwap Team" }]
+dependencies = []
+
+[project.scripts]
+q1-faceswap = "core.__main__:main"
+
+[tool.setuptools]
+packages = ["core", "core.processors"]

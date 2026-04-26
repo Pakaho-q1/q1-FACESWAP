@@ -1,0 +1,37 @@
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+**.env_user
+*.pth
+**.onnx
+**.weights
+**models/
+**faces/
+**trt_cache/
+**TensorRT/
+**temp_audio/
+**settings.json
+**input/
+**output/
+.vscode/
+**/__pycache__/
+**/*.pyc
+**/.ipynb_checkpoints/
+*.aac
+*.mp3
+*.wav
+*.flac
+*.jpg
+*.jpeg
+# ถ้ามีไฟล์ log จากการ Run model
+**/logs/
+*.log
+*run_Telegram-bot.bat
+**.ipynb_checkpoints/
+assets/settings.json
+
+# Runtime artifacts and temporary face-builder uploads
+assets/runtime/*
+!assets/runtime/.gitkeep

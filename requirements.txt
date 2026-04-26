@@ -1,0 +1,16 @@
+# Core Vision & Image Processing
+opencv-python>=4.8.0
+scikit-image>=0.21.0
+numpy<2.0.0
+nicegui
+pytest
+
+# AI Models & Inference
+onnxruntime-gpu>=1.17.0
+onnxruntime
+insightface>=0.7.3
+safetensors>=0.4.0
+
+# System Monitoring & Utilities
+rich>=14.0.0
+nvidia-ml-py>=12.535.0
