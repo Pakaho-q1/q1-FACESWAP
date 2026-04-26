@@ -217,11 +217,13 @@ def build_main_ui(root: Any, project_root: str) -> None:
             self,
             panel: Any,
             body: Any,
+            header_lead: Any,
             title_label: Any,
             toggle_button: Any,
         ) -> None:
             self._panel = panel
             self._body = body
+            self._header_lead = header_lead
             self._title_label = title_label
             self._toggle_button = toggle_button
             self.value = True
@@ -235,13 +237,17 @@ def build_main_ui(root: Any, project_root: str) -> None:
             if self.value:
                 self._panel.classes(remove="is-collapsed")
                 self._body.classes(remove="hidden")
+                self._header_lead.classes(remove="hidden")
                 self._title_label.classes(remove="hidden")
-                self._toggle_button.set_text("Collapse")
+                self._toggle_button.set_text("</>")
+                self._toggle_button.tooltip("Collapse preview")
             else:
                 self._panel.classes(add="is-collapsed")
                 self._body.classes(add="hidden")
+                self._header_lead.classes(add="hidden")
                 self._title_label.classes(add="hidden")
-                self._toggle_button.set_text("Expand")
+                self._toggle_button.set_text("</>")
+                self._toggle_button.tooltip("Expand preview")
 
     with root:
         with ui.row().classes("app-header w-full items-center justify-between"):
@@ -481,7 +487,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
             "card-soft runtime-panel runtime-summary runtime-summary-card runtime-health w-full shadow-sm rounded-lg"
         ):
             with ui.row().classes(
-                "w-full items-center justify-between q-px-xs bg-slate-50 border-b border-slate-100"
+                "w-full items-center justify-between q-px-sm bg-slate-50 border-b border-slate-100"
             ):
                 with ui.row().classes("items-center gap-1"):
                     ui.icon("monitor_heart", color="primary").classes("text-sm")
@@ -558,14 +564,14 @@ def build_main_ui(root: Any, project_root: str) -> None:
 
             # Error Label
             health_missing = ui.label("").classes(
-                "w-full q-px-xs text-[11px] text-rose-600 italic"
+                "w-full q-px-sm text-[12px] text-rose-600 italic"
             )
 
         with ui.card().classes(
             "card-soft runtime-panel runtime-summary runtime-summary-card runtime-queue w-full shadow-sm rounded-lg"
         ):
             with ui.row().classes(
-                "w-full items-center justify-between q-px-xs bg-slate-50 border-b border-slate-100"
+                "w-full items-center justify-between q-px-sm bg-slate-50 border-b border-slate-100"
             ):
                 with ui.row().classes("items-center gap-1"):
                     ui.icon("memory", color="primary").classes("text-sm")
@@ -656,7 +662,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
             "card-soft runtime-panel runtime-summary runtime-summary-card runtime-tuner w-full shadow-sm rounded-lg"
         ):
             with ui.row().classes(
-                "w-full items-center q-px-xs bg-slate-50 border-b border-slate-100 gap-1"
+                "w-full items-center q-px-sm bg-slate-50 border-b border-slate-100 gap-1"
             ):
                 ui.icon("settings_input_component", color="primary").classes("text-sm")
                 ui.label("Tuner Live").classes(
@@ -664,7 +670,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                 )
 
                 # Row 1: GPU, mode, hot stage
-            with ui.grid(columns=3).classes("w-full gap-1 q-pa-none"):
+            with ui.grid(columns=3).classes("w-full gap-1 q-pa-xs"):
                 # GPU Usage
                 with ui.row().classes(
                     "items-center justify-between q-px-xs border border-indigo-100 rounded bg-indigo-50/30"
@@ -691,7 +697,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                     )
 
                 # Rows 2-3: queue and permit mini-badges
-            with ui.column().classes("w-full q-pa-none gap-1"):
+            with ui.column().classes("w-full q-pa-xs gap-1"):
                 # Q Series
                 with ui.grid(columns=4).classes("w-full gap-1"):
                     with ui.row().classes(
@@ -768,7 +774,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
             ):
                 ui.icon("show_chart", color="primary").classes("text-sm")
                 ui.label("Performance Charts").classes(
-                    "text-[10px] font-black text-slate-500 uppercase tracking-tighter"
+                    "text-[sm] font-black text-slate-500 uppercase tracking-tighter"
                 )
 
             # Three charts laid out in one row
@@ -954,7 +960,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
 
         # --- 2. Runtime Console + Live Preview ---
         with ui.row().classes(
-            "runtime-panel runtime-console-preview-row w-full no-wrap items-stretch gap-2"
+            "runtime-panel runtime-console-preview-row w-full no-wrap q-pa-none items-stretch gap-2"
         ):
             with ui.card().classes(
                 "card-soft runtime-console w-full shadow-sm rounded-xl overflow-hidden q-pa-none"
@@ -998,25 +1004,27 @@ def build_main_ui(root: Any, project_root: str) -> None:
                 with ui.row().classes(
                     "runtime-preview-header w-full items-center justify-between bg-slate-100 q-px-sm border-b border-slate-200"
                 ):
-                    with ui.row().classes("items-center gap-2"):
+                    with ui.row().classes("runtime-preview-lead items-center gap-2") as preview_header_lead:
                         ui.icon("visibility", color="slate-700").classes("text-lg")
                         preview_title = ui.label("Live Preview").classes(
                             "runtime-preview-title text-sm font-bold text-slate-700"
                         )
                     preview_toggle_btn = (
-                        ui.button("Collapse", color="secondary")
+                        ui.button("</>", color="secondary")
                         .props("flat dense")
-                        .classes("text-xs font-bold")
+                        .classes("runtime-preview-toggle text-slate-600")
+                        .tooltip("Collapse preview")
                     )
 
                 with ui.column().classes(
-                    "runtime-preview-body w-full q-pa-none"
+                    "runtime-preview-body w-full q-pt-none q-px-xs q-pb-sm"
                 ) as preview_body:
                     build_preview_container(preview_dom_id)
                 preview_meta = _NoopText()
                 preview_expansion = _SideCollapseController(
                     preview_panel,
                     preview_body,
+                    preview_header_lead,
                     preview_title,
                     preview_toggle_btn,
                 )
@@ -1211,13 +1219,12 @@ def register_ui_assets() -> None:
             grid-column: auto;
             order: 1;
             height: 100%;
-            min-height: 118px;
-            align-self: stretch;
+            min-height: 188px;
           }
           .runtime-summary-card .summary-header {
-            min-height: 26px;
-            padding: 1px 3px;
-            margin-bottom: 2px;
+            min-height: 30px;
+            padding: 2px 4px;
+            margin-bottom: 4px;
           }
           .runtime-summary-card .summary-header .q-icon {
             font-size: 1rem !important;
@@ -1229,7 +1236,7 @@ def register_ui_assets() -> None:
             gap: 4px;
           }
           .runtime-summary-card .q-card__section {
-            padding: 2px 4px;
+            padding: 4px 6px;
           }
           .runtime-workspace > .runtime-health { order: 1; }
           .runtime-workspace > .runtime-queue { order: 2; }
@@ -1262,17 +1269,33 @@ def register_ui_assets() -> None:
           .runtime-console-preview-row .runtime-console-body .q-log {
             height: 100% !important;
           }
+          .runtime-preview-header {
+            position: relative;
+            display: flex;
+            align-items: center;
+            width: 100%;
+          }
+          .runtime-preview-lead {
+            flex: 1 1 auto;
+            min-width: 0;
+          }
+          .runtime-preview-toggle {
+            margin-left: auto;
+            flex: 0 0 auto;
+            align-self: center;
+          }
           .runtime-console-preview-row > .runtime-preview-side.is-collapsed {
-            flex: 0 0 72px;
-            min-width: 72px;
-            max-width: 72px;
+            flex: 0 0 52px;
+            min-width: 52px;
+            max-width: 52px;
           }
           .runtime-console-preview-row > .runtime-preview-side.is-collapsed .runtime-preview-header {
-            justify-content: center;
-            padding-left: 4px;
-            padding-right: 4px;
+            justify-content: flex-end;
+            padding-left: 0;
+            padding-right: 0;
           }
-          .runtime-console-preview-row > .runtime-preview-side.is-collapsed .runtime-preview-title {
+          .runtime-console-preview-row > .runtime-preview-side.is-collapsed .runtime-preview-title,
+          .runtime-console-preview-row > .runtime-preview-side.is-collapsed .runtime-preview-lead {
             display: none;
           }
           .runtime-workspace > .runtime-charts { grid-column: 1 / -1; order: 5; }
