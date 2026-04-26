@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from collections import deque
 import os
@@ -208,6 +208,41 @@ def build_main_ui(root: Any, project_root: str) -> None:
     # preview_active_layer stored in store.preview_active_layer
     preview_dom_id = f"q1_preview_{int(time.time() * 1000)}"
 
+    class _NoopText:
+        def set_text(self, _value: str) -> None:
+            return None
+
+    class _SideCollapseController:
+        def __init__(
+            self,
+            panel: Any,
+            body: Any,
+            title_label: Any,
+            toggle_button: Any,
+        ) -> None:
+            self._panel = panel
+            self._body = body
+            self._title_label = title_label
+            self._toggle_button = toggle_button
+            self.value = True
+            self._apply()
+
+        def set_value(self, value: bool) -> None:
+            self.value = bool(value)
+            self._apply()
+
+        def _apply(self) -> None:
+            if self.value:
+                self._panel.classes(remove="is-collapsed")
+                self._body.classes(remove="hidden")
+                self._title_label.classes(remove="hidden")
+                self._toggle_button.set_text("Collapse")
+            else:
+                self._panel.classes(add="is-collapsed")
+                self._body.classes(add="hidden")
+                self._title_label.classes(add="hidden")
+                self._toggle_button.set_text("Expand")
+
     with root:
         with ui.row().classes("app-header w-full items-center justify-between"):
             with ui.column().classes("gap-0"):
@@ -223,107 +258,29 @@ def build_main_ui(root: Any, project_root: str) -> None:
                 )
                 init_btn = ui.button("Initialize Project Structure", color="secondary")
 
-        with ui.card().classes(
-            "card-soft runtime-panel runtime-summary runtime-summary-card runtime-health w-full shadow-sm rounded-lg q-pa-xs"
-        ):
-            with ui.row().classes("w-full items-center justify-between summary-header"):
-                with ui.row().classes("items-center gap-2"):
-                    ui.icon("monitor_heart", color="primary").classes("text-base")
-                    ui.label("System Health").classes(
-                        "text-sm font-bold text-slate-700"
-                    )
-
-                refresh_health_btn = (
-                    ui.button("Refresh", icon="refresh", color="secondary")
-                    .props("flat dense stack-label")
-                    .classes("text-xs")
-                )
-
-            # ปรับเป็น 5 คอลัมน์ที่กระชับขึ้น
-            with ui.grid(columns=2).classes("w-full gap-1 q-pa-xs"):
-
-                # Models
-                with ui.card().classes(
-                    "w-full q-pa-xs border-l-4 border-violet-400 bg-violet-50 cursor-pointer shadow-none"
-                ) as health_models_card:
-                    with ui.column().classes("gap-0"):
-                        ui.label("Models").classes(
-                            "text-[10px] font-bold text-violet-700 uppercase"
-                        )
-                        health_models = ui.label("-").classes(
-                            "text-xs font-semibold text-violet-900"
-                        )
-
-                # FFmpeg
-                with ui.card().classes(
-                    "w-full q-pa-xs border-l-4 border-cyan-400 bg-cyan-50 shadow-none"
-                ):
-                    with ui.column().classes("gap-0"):
-                        ui.label("FFmpeg").classes(
-                            "text-[10px] font-bold text-cyan-700 uppercase"
-                        )
-                        health_ffmpeg = ui.label("-").classes(
-                            "text-xs font-semibold text-cyan-900"
-                        )
-
-                # TensorRT
-                with ui.card().classes(
-                    "w-full q-pa-xs border-l-4 border-sky-400 bg-sky-50 cursor-pointer shadow-none"
-                ) as health_tensorrt_card:
-                    with ui.column().classes("gap-0"):
-                        ui.label("TensorRT").classes(
-                            "text-[10px] font-bold text-sky-700 uppercase"
-                        )
-                        health_tensorrt = ui.label("-").classes(
-                            "text-xs font-semibold text-sky-900"
-                        )
-
-                # Free Disk
-                with ui.card().classes(
-                    "w-full q-pa-xs border-l-4 border-amber-400 bg-amber-50 shadow-none"
-                ):
-                    with ui.column().classes("gap-0"):
-                        ui.label("Free Disk").classes(
-                            "text-[10px] font-bold text-amber-700 uppercase"
-                        )
-                        health_disk = ui.label("-").classes(
-                            "text-xs font-semibold text-amber-900"
-                        )
-
-                # Writable Output
-                with ui.card().classes(
-                    "w-full q-pa-xs border-l-4 border-emerald-400 bg-emerald-50 shadow-none"
-                ):
-                    with ui.column().classes("gap-0"):
-                        ui.label("Writable").classes(
-                            "text-[10px] font-bold text-emerald-700 uppercase"
-                        )
-                        health_writable = ui.label("-").classes(
-                            "text-xs font-semibold text-emerald-900"
-                        )
-
-            # ส่วนแสดง Error ถ้ามี
-            with ui.row().classes("w-full q-px-sm q-pb-xs"):
-                health_missing = ui.label("").classes(
-                    "text-[10px] text-rose-600 font-medium italic"
-                )
-
-        with ui.card().classes("card-soft settings-panel w-full"):
-            ui.label("Project Settings").classes("text-lg font-semibold")
+        with ui.expansion(
+            "Project Settings",
+            icon="tune",
+            value=True,
+        ).classes("card-soft settings-panel w-full"):
             with ui.grid(columns=1).classes("w-full gap-3"):
                 default_format = (
                     "image" if defaults["format"] not in {"video", "2"} else "video"
                 )
                 with ui.row().classes("items-end w-full gap-2"):
-                    face_select = ui.select(
-                        face_names,
-                        value=(
-                            defaults["face_name"]
-                            if defaults["face_name"] in face_names
-                            else None
-                        ),
-                        label="Face Model",
-                    ).props("clearable").classes("grow")
+                    face_select = (
+                        ui.select(
+                            face_names,
+                            value=(
+                                defaults["face_name"]
+                                if defaults["face_name"] in face_names
+                                else None
+                            ),
+                            label="Face Model",
+                        )
+                        .props("clearable")
+                        .classes("grow")
+                    )
                     face_build_open_btn = ui.button(
                         "Build Face Model",
                         icon="construction",
@@ -365,12 +322,11 @@ def build_main_ui(root: Any, project_root: str) -> None:
                 validate_input_label = ui.label("").classes("text-xs")
                 validate_output_label = ui.label("").classes("text-xs")
 
-        with ui.card().classes("card-soft settings-panel w-full"):
-            with ui.row().classes("w-full items-center justify-between"):
-                ui.label("Processing Settings").classes("text-lg font-semibold")
-                ui.label("Only enabled stages show their controls.").classes(
-                    "text-xs text-slate-500"
-                )
+        with ui.expansion(
+            "Processing Settings",
+            icon="tune",
+            value=True,
+        ).classes("card-soft settings-panel w-full"):
             with ui.grid(columns=2).classes("w-full gap-3"):
                 workers_per_stage = ui.number(
                     "Workers/Stage", value=defaults["workers_per_stage"], min=1, max=128
@@ -412,30 +368,39 @@ def build_main_ui(root: Any, project_root: str) -> None:
                     max=30.0,
                 ).props("dense outlined")
 
-        with ui.row().classes(
-            "settings-panel w-full gap-2 items-center bg-white p-4 rounded-lg border border-slate-200 justify-between"
-        ):
-            # ใช้ classes('grow') เพื่อให้ช่วยกันยืด หรือใช้ row ปกติแต่กระจายด้วย justify-between
-            use_swaper = ui.checkbox("Use Swapper", value=defaults["use_swaper"])
-            use_restore = ui.checkbox("Use Restore", value=defaults["use_restore"])
-            use_parser = ui.checkbox("Use Parser", value=defaults["use_parser"])
-            preserve_swap_eyes = ui.checkbox(
-                "Preserve Eyes", value=defaults["preserve_swap_eyes"]
-            )
-            dry_run = ui.checkbox("Dry Run", value=defaults["dry_run"])
-            preview_enabled = ui.checkbox("Preview", value=defaults["preview_enabled"])
+        # Stage controls
+        with ui.expansion(
+            "Stage Controls",
+            icon="settings_input_component",
+            value=True,
+        ).classes("card-soft settings-panel w-full shadow-md text-primary"):
 
-        # --- ส่วน Stage Controls: ยืดเต็ม Card ---
-        with ui.card().classes("card-soft settings-panel w-full shadow-md"):
-            ui.label("Stage Controls").classes("text-lg font-semibold text-primary")
+            with ui.grid(columns=3).classes(
+                "settings-panel w-full gap-x-8 gap-y-2 items-center bg-white p-4 rounded-lg border border-slate-200"
+            ):
+                # Row 1
+                use_swaper = ui.checkbox("Use Swapper", value=defaults["use_swaper"])
+                use_restore = ui.checkbox("Use Restore", value=defaults["use_restore"])
+                use_parser = ui.checkbox("Use Parser", value=defaults["use_parser"])
 
-            # ปรับเป็น Grid columns=1 และใช้ gap-4 เพื่อความโปร่ง
+                # Row 2
+                preserve_swap_eyes = ui.checkbox(
+                    "Preserve Eyes", value=defaults["preserve_swap_eyes"]
+                )
+                preview_enabled = ui.checkbox(
+                    "Preview", value=defaults["preview_enabled"]
+                )
+                dry_run = ui.checkbox("Dry Run", value=defaults["dry_run"]).classes(
+                    "text-rose-600"
+                )
+
+            # Per-stage settings
             with ui.column().classes("w-full gap-4"):
 
                 # --- Swapper Section ---
                 with ui.column().classes("w-full gap-2") as swapper_settings_panel:
                     with ui.row().classes("w-full"):
-                        # ใช้ .classes('grow') เพื่อให้ยืดเต็มที่เหลือ
+                        # Stretch to fill the available width.
                         swapper_blend = (
                             ui.number(
                                 "Swapper Blend",
@@ -449,7 +414,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
 
                 # --- Restore Section ---
                 with ui.column().classes("w-full gap-2") as restore_settings_panel:
-                    # ใช้ Grid แทน Row เพื่อให้แบ่งช่องเท่ากัน 3 ส่วน
+                    # Use a 3-column grid to keep the controls balanced.
                     with ui.grid(columns=3).classes("w-full gap-3"):
                         restore_choice = (
                             ui.select(
@@ -513,339 +478,446 @@ def build_main_ui(root: Any, project_root: str) -> None:
                         )
 
         with ui.card().classes(
-            "card-soft runtime-panel runtime-summary runtime-summary-card runtime-queue w-full shadow-sm rounded-lg q-pa-xs"
+            "card-soft runtime-panel runtime-summary runtime-summary-card runtime-health w-full shadow-sm rounded-lg"
         ):
-            with ui.row().classes("w-full items-center justify-between summary-header"):
-                with ui.row().classes("items-center gap-2"):
-                    ui.icon("memory", color="primary").classes("text-base")
-                    ui.label("Job Queue").classes("text-sm font-bold text-slate-700")
+            with ui.row().classes(
+                "w-full items-center justify-between q-px-sm bg-slate-50 border-b border-slate-100"
+            ):
+                with ui.row().classes("items-center gap-1"):
+                    ui.icon("monitor_heart", color="primary").classes("text-sm")
+                    ui.label("System Health").classes(
+                        "text-[10px] font-black text-slate-500 uppercase tracking-tighter"
+                    )
 
-                refresh_queue_btn = (
-                    ui.button("Refresh", icon="sync", color="secondary")
-                    .props("flat dense stack-label")
-                    .classes("text-xs")
+                refresh_health_btn = (
+                    ui.button(icon="sync", color="secondary")
+                    .props("flat dense size=sm")
+                    .classes("text-slate-400")
                 )
 
-            with ui.column().classes("w-full q-pa-xs gap-1"):
-                # แถวบน: แบ่งตามประเภทสื่อ (Jobs by Type)
+            # Main content container
+            with ui.column().classes("w-full q-pa-none gap-1"):
+
+                # Top row: models, FFmpeg, TensorRT
+                with ui.grid(columns=3).classes("w-full q-pa-none gap-1"):
+                    # 1. Models
+                    with ui.row().classes(
+                        "items-center no-wrap gap-1 q-px-xs border border-violet-100 rounded bg-violet-50/30"
+                    ) as health_models_card:
+                        ui.element("div").classes("w-1 h-3 bg-violet-400 rounded-full")
+                        ui.label("MOD:").classes(
+                            "text-[12px] font-bold text-violet-700"
+                        )
+                        health_models = ui.label("-").classes(
+                            "text-[12px] font-black text-violet-900"
+                        )
+
+                    # 2. FFmpeg
+                    with ui.row().classes(
+                        "items-center no-wrap gap-1 q-px-xs border border-cyan-100 rounded bg-cyan-50/30"
+                    ):
+                        ui.element("div").classes("w-1 h-3 bg-cyan-400 rounded-full")
+                        ui.label("FFM:").classes("text-[12px] font-bold text-cyan-700")
+                        health_ffmpeg = ui.label("-").classes(
+                            "text-[12px] font-black text-cyan-900"
+                        )
+
+                    # 3. TensorRT
+                    with ui.row().classes(
+                        "items-center no-wrap gap-1 q-px-xs border border-sky-100 rounded bg-sky-50/30"
+                    ) as health_tensorrt_card:
+                        ui.element("div").classes("w-1 h-3 bg-sky-400 rounded-full")
+                        ui.label("TRT:").classes("text-[12px] font-bold text-sky-700")
+                        health_tensorrt = ui.label("-").classes(
+                            "text-[12px] font-black text-sky-900"
+                        )
+
+                # Bottom row: disk and writable output
+                with ui.grid(columns=2).classes("w-full gap-1"):
+                    # 4. Free Disk
+                    with ui.row().classes(
+                        "items-center no-wrap gap-1 q-px-xs border border-amber-100 rounded bg-amber-50/30"
+                    ):
+                        ui.element("div").classes("w-1 h-3 bg-amber-400 rounded-full")
+                        ui.label("DSK:").classes("text-[12px] font-bold text-amber-700")
+                        health_disk = ui.label("-").classes(
+                            "text-[12px] font-black text-amber-900"
+                        )
+
+                    # 5. Writable Output
+                    with ui.row().classes(
+                        "items-center no-wrap gap-1 q-px-xs border border-emerald-100 rounded bg-emerald-50/30"
+                    ):
+                        ui.element("div").classes("w-1 h-3 bg-emerald-400 rounded-full")
+                        ui.label("WRT:").classes(
+                            "text-[12px] font-bold text-emerald-700"
+                        )
+                        health_writable = ui.label("-").classes(
+                            "text-[12px] font-black text-emerald-900"
+                        )
+
+            # Error Label
+            health_missing = ui.label("").classes(
+                "w-full q-px-sm text-[12px] text-rose-600 italic"
+            )
+
+        with ui.card().classes(
+            "card-soft runtime-panel runtime-summary runtime-summary-card runtime-queue w-full shadow-sm rounded-lg"
+        ):
+            with ui.row().classes(
+                "w-full items-center justify-between q-px-sm bg-slate-50 border-b border-slate-100"
+            ):
+                with ui.row().classes("items-center gap-1"):
+                    ui.icon("memory", color="primary").classes("text-sm")
+                    ui.label("Job Queue").classes(
+                        "text-sm font-black text-slate-500 uppercase tracking-tighter"
+                    )
+                refresh_queue_btn = ui.button(icon="sync", color="secondary").props(
+                    "flat dense size=sm"
+                )
+
+            with ui.column().classes("w-full q-pa-none gap-1"):
+                # Top row: media types
                 with ui.grid(columns=3).classes("w-full gap-1"):
                     # Image Jobs
-                    queue_image = metric_card(
-                        "Images",
-                        value="0",
-                        size="compact",
-                        card_classes="w-full border-l-4 border-blue-400 bg-blue-50 q-pa-xs shadow-none",
-                        title_classes="text-[9px] font-bold text-blue-700 uppercase",
-                        value_classes="text-base font-bold text-blue-900",
-                    )
+                    with ui.row().classes(
+                        "items-center justify-between q-px-xs border border-blue-100 rounded bg-blue-50/30"
+                    ):
+                        ui.label("IMG:").classes("text-[12px] font-bold text-blue-700")
+                        queue_image = ui.label("0").classes(
+                            "text-[10px] font-black text-blue-900"
+                        )
                     # Video Jobs
-                    queue_video = metric_card(
-                        "Videos",
-                        value="0",
-                        size="compact",
-                        card_classes="w-full border-l-4 border-rose-400 bg-rose-50 q-pa-xs shadow-none",
-                        title_classes="text-[9px] font-bold text-rose-700 uppercase",
-                        value_classes="text-base font-bold text-rose-900",
-                    )
-                    # Selected Format
-                    queue_selected = metric_card(
-                        "Selected",
-                        value="0",
-                        size="compact",
-                        card_classes="w-full border-l-4 border-slate-400 bg-slate-50 q-pa-xs shadow-none",
-                        title_classes="text-[9px] font-bold text-slate-700 uppercase",
-                        value_classes="text-base font-bold text-slate-900",
-                    )
-                with ui.column().classes("w-full gap-1 q-px-xs q-mt-xs"):
-
-                    # แถวล่าง: แบ่งตามสถานะการทำงาน (Jobs by Status)
-                    with ui.grid(columns=4).classes("w-full gap-1"):
-                        queue_planned_status = metric_card(
-                            "Planned",
-                            value="0",
-                            size="compact",
-                            card_classes="w-full bg-slate-100/50 q-pa-xs text-center shadow-none border border-slate-200",
-                            title_classes="text-[8px] text-slate-500 font-bold uppercase",
-                            value_classes="text-sm font-bold text-slate-700",
+                    with ui.row().classes(
+                        "items-center justify-between q-px-xs border border-rose-100 rounded bg-rose-50/30"
+                    ):
+                        ui.label("VID:").classes("text-[12px] font-bold text-rose-700")
+                        queue_video = ui.label("0").classes(
+                            "text-[10px] font-black text-rose-900"
                         )
-                        queue_running_status = metric_card(
-                            "Running",
-                            value="0",
-                            size="compact",
-                            card_classes="w-full bg-blue-100/50 q-pa-xs text-center shadow-none border border-blue-200",
-                            title_classes="text-[8px] text-blue-500 font-bold uppercase",
-                            value_classes="text-sm font-bold text-blue-700",
-                        )
-                        queue_done_status = metric_card(
-                            "Done",
-                            value="0",
-                            size="compact",
-                            card_classes="w-full bg-emerald-100/50 q-pa-xs text-center shadow-none border border-emerald-200",
-                            title_classes="text-[8px] text-emerald-500 font-bold uppercase",
-                            value_classes="text-sm font-bold text-emerald-700",
-                        )
-                        queue_failed_status = metric_card(
-                            "Failed",
-                            value="0",
-                            size="compact",
-                            card_classes="w-full bg-rose-100/50 q-pa-xs text-center shadow-none border border-rose-200",
-                            title_classes="text-[8px] text-rose-500 font-bold uppercase",
-                            value_classes="text-sm font-bold text-rose-700",
+                    # Selected
+                    with ui.row().classes(
+                        "items-center justify-between q-px-xs border border-slate-100 rounded bg-slate-50/30"
+                    ):
+                        ui.label("SEL:").classes("text-[12px] font-bold text-slate-700")
+                        queue_selected = ui.label("0").classes(
+                            "text-[10px] font-black text-slate-900"
                         )
 
-                    # Footer Hint
-                    queue_hint = ui.label("Preview checks input path only.").classes(
-                        "text-[10px] text-slate-400 italic mt-[-4px]"
-                    )
+                # Bottom row: job status
+                with ui.grid(columns=4).classes("w-full gap-1"):
+                    # Planned
+                    with ui.column().classes(
+                        "items-center gap-0 border border-slate-100 rounded q-pa-none bg-white"
+                    ):
+                        ui.label("PLN").classes(
+                            "text-[7px] font-bold text-slate-400 uppercase"
+                        )
+                        queue_planned_status = ui.label("0").classes(
+                            "text-[10px] font-bold text-slate-600"
+                        )
+                    # Running
+                    with ui.column().classes(
+                        "items-center gap-0 border border-blue-100 rounded q-pa-none bg-white"
+                    ):
+                        ui.label("RUN").classes(
+                            "text-[7px] font-bold text-blue-400 uppercase"
+                        )
+                        queue_running_status = ui.label("0").classes(
+                            "text-[10px] font-bold text-blue-600"
+                        )
+                    # Done
+                    with ui.column().classes(
+                        "items-center gap-0 border border-emerald-100 rounded q-pa-none bg-white"
+                    ):
+                        ui.label("DONE").classes(
+                            "text-[7px] font-bold text-emerald-400 uppercase"
+                        )
+                        queue_done_status = ui.label("0").classes(
+                            "text-[10px] font-bold text-emerald-600"
+                        )
+                    # Failed
+                    with ui.column().classes(
+                        "items-center gap-0 border border-rose-100 rounded q-pa-none bg-white"
+                    ):
+                        ui.label("FAIL").classes(
+                            "text-[7px] font-bold text-rose-400 uppercase"
+                        )
+                        queue_failed_status = ui.label("0").classes(
+                            "text-[10px] font-bold text-rose-600"
+                        )
+
+                queue_hint = ui.label("Preview checks input path only.").classes(
+                    "text-[8px] text-slate-400 italic q-px-xs"
+                )
 
         # --- Section: Tuner Live ---
         with ui.card().classes(
-            "card-soft runtime-panel runtime-summary runtime-summary-card runtime-tuner w-full shadow-sm rounded-lg q-pa-xs"
+            "card-soft runtime-panel runtime-summary runtime-summary-card runtime-tuner w-full shadow-sm rounded-lg"
         ):
-            with ui.row().classes("w-full items-center gap-2 summary-header"):
-                ui.icon("memory", color="primary").classes("text-base")
-                ui.label("Tuner Live").classes("text-sm font-bold text-slate-700")
-
-            # -- แถว 1: สถานะหลัก (GPU, Mode, Hot Stage) --
-            with ui.grid(columns=3).classes("w-full gap-1 q-px-xs"):
-                tuner_gpu = metric_card(
-                    "GPU Usage",
-                    value="0%",
-                    size="compact",
-                    card_classes="w-full border-l-4 border-indigo-400 bg-indigo-50 q-pa-xs shadow-none",
-                    title_classes="text-[9px] font-bold text-indigo-500 uppercase",
-                    value_classes="text-base font-bold text-indigo-800",
-                )
-                tuner_mode_live = metric_card(
-                    "Mode",
-                    value="normal",
-                    size="compact",
-                    card_classes="w-full border-l-4 border-emerald-400 bg-emerald-50 q-pa-xs shadow-none",
-                    title_classes="text-[9px] font-bold text-emerald-500 uppercase",
-                    value_classes="text-sm font-bold text-emerald-800",
-                )
-                tuner_hot = metric_card(
-                    "Hot Stage",
-                    value="-",
-                    size="compact",
-                    card_classes="w-full border-l-4 border-amber-400 bg-amber-50 q-pa-xs shadow-none",
-                    title_classes="text-[9px] font-bold text-amber-500 uppercase",
-                    value_classes="text-base font-bold text-amber-800",
+            with ui.row().classes(
+                "w-full items-center q-px-sm bg-slate-50 border-b border-slate-100 gap-1"
+            ):
+                ui.icon("settings_input_component", color="primary").classes("text-sm")
+                ui.label("Tuner Live").classes(
+                    "text-sm font-black text-slate-500 uppercase tracking-tighter"
                 )
 
-            # -- แถว 2-3: คิว Q & P (บีบอัดเป็น 4 คอลัมน์เล็กๆ) --
-            with ui.column().classes("w-full gap-1 q-px-xs q-mt-xs"):
+                # Row 1: GPU, mode, hot stage
+            with ui.grid(columns=3).classes("w-full gap-1 q-pa-xs"):
+                # GPU Usage
+                with ui.row().classes(
+                    "items-center justify-between q-px-xs border border-indigo-100 rounded bg-indigo-50/30"
+                ):
+                    ui.label("GPU:").classes("text-[12px] font-bold text-indigo-700")
+                    tuner_gpu = ui.label("0%").classes(
+                        "text-[10px] font-black text-indigo-900"
+                    )
+                # Mode
+                with ui.row().classes(
+                    "items-center justify-between q-px-xs border border-emerald-100 rounded bg-emerald-50/30"
+                ):
+                    ui.label("MODE:").classes("text-[12px] font-bold text-emerald-700")
+                    tuner_mode_live = ui.label("norm").classes(
+                        "text-[10px] font-black text-emerald-900"
+                    )
+                # Hot Stage
+                with ui.row().classes(
+                    "items-center justify-between q-px-xs border border-amber-100 rounded bg-amber-50/30"
+                ):
+                    ui.label("HOT:").classes("text-[12px] font-bold text-amber-700")
+                    tuner_hot = ui.label("-").classes(
+                        "text-[10px] font-black text-amber-900"
+                    )
+
+                # Rows 2-3: queue and permit mini-badges
+            with ui.column().classes("w-full q-pa-xs gap-1"):
                 # Q Series
                 with ui.grid(columns=4).classes("w-full gap-1"):
-                    # Q Detect (โค้ดเดิมไม่มี as card)
-                    with ui.card().classes(
-                        "w-full bg-blue-100/50 q-pa-xs text-center shadow-none border border-blue-200"
+                    with ui.row().classes(
+                        "items-center no-wrap gap-1 q-px-xs border border-blue-100 rounded bg-blue-50/20"
                     ):
-                        ui.label("Q Detect").classes("text-[8px] text-blue-600")
+                        ui.label("QD:").classes("text-[8px] font-bold text-blue-600")
                         q_detect_label = ui.label("0").classes(
-                            "text-xs font-bold text-blue-900"
+                            "text-[12px] font-black text-blue-900"
                         )
-
-                    # Q Swap (ใส่ as q_swap_card กลับเข้าไป)
-                    with ui.card().classes(
-                        "w-full bg-orange-100/50 q-pa-xs text-center shadow-none border border-orange-200"
+                    with ui.row().classes(
+                        "items-center no-wrap gap-1 q-px-xs border border-orange-100 rounded bg-orange-50/20"
                     ) as q_swap_card:
-                        ui.label("Q Swap").classes("text-[8px] text-orange-600")
+                        ui.label("QS:").classes("text-[8px] font-bold text-orange-600")
                         q_swap_label = ui.label("0").classes(
-                            "text-xs font-bold text-orange-900"
+                            "text-[12px] font-black text-orange-900"
                         )
-
-                    # Q Restore
-                    with ui.card().classes(
-                        "w-full bg-green-100/50 q-pa-xs text-center shadow-none border border-green-200"
+                    with ui.row().classes(
+                        "items-center no-wrap gap-1 q-px-xs border border-green-100 rounded bg-green-50/20"
                     ) as q_restore_card:
-                        ui.label("Q Restore").classes("text-[8px] text-green-600")
+                        ui.label("QR:").classes("text-[8px] font-bold text-green-600")
                         q_restore_label = ui.label("0").classes(
-                            "text-xs font-bold text-green-900"
+                            "text-[12px] font-black text-green-900"
                         )
-
-                    # Q Parse
-                    with ui.card().classes(
-                        "w-full bg-rose-100/50 border border-rose-200 q-pa-xs text-center shadow-none"
+                    with ui.row().classes(
+                        "items-center no-wrap gap-1 q-px-xs border border-rose-100 rounded bg-rose-50/20"
                     ) as q_parse_card:
-                        ui.label("Q Parse").classes("text-[8px] text-rose-600")
+                        ui.label("QP:").classes("text-[8px] font-bold text-rose-600")
                         q_parse_label = ui.label("0").classes(
-                            "text-xs font-bold text-rose-900"
+                            "text-[12px] font-black text-rose-900"
                         )
 
                 # P Series
                 with ui.grid(columns=4).classes("w-full gap-1"):
-                    # P Detect
-                    with ui.card().classes(
-                        "w-full bg-blue-100/50 q-pa-xs text-center shadow-none border border-blue-200"
+                    with ui.row().classes(
+                        "items-center no-wrap gap-1 q-px-xs border border-blue-100 rounded bg-blue-50/20"
                     ):
-                        ui.label("P Detect").classes("text-[8px] text-blue-600")
+                        ui.label("PD:").classes("text-[8px] font-bold text-blue-600")
                         p_detect_label = ui.label("0").classes(
-                            "text-xs font-bold text-blue-900"
+                            "text-[12px] font-black text-blue-900"
                         )
-
-                    # P Swap
-                    with ui.card().classes(
-                        "w-full bg-orange-100/50 q-pa-xs text-center shadow-none border border-orange-200"
+                    with ui.row().classes(
+                        "items-center no-wrap gap-1 q-px-xs border border-orange-100 rounded bg-orange-50/20"
                     ) as p_swap_card:
-                        ui.label("P Swap").classes("text-[8px] text-orange-600")
+                        ui.label("PS:").classes("text-[8px] font-bold text-orange-600")
                         p_swap_label = ui.label("0").classes(
-                            "text-xs font-bold text-orange-900"
+                            "text-[12px] font-black text-orange-900"
                         )
-
-                    # P Restore
-                    with ui.card().classes(
-                        "w-full bg-green-100/50 q-pa-xs text-center shadow-none border border-green-200"
+                    with ui.row().classes(
+                        "items-center no-wrap gap-1 q-px-xs border border-green-100 rounded bg-green-50/20"
                     ) as p_restore_card:
-                        ui.label("P Restore").classes("text-[8px] text-green-600")
+                        ui.label("PR:").classes("text-[8px] font-bold text-green-600")
                         p_restore_label = ui.label("0").classes(
-                            "text-xs font-bold text-green-900"
+                            "text-[12px] font-black text-green-900"
                         )
-
-                    # P Parse
-                    with ui.card().classes(
-                        "w-full bg-rose-100/50 q-pa-xs text-center shadow-none border border-rose-200"
+                    with ui.row().classes(
+                        "items-center no-wrap gap-1 q-px-xs border border-rose-100 rounded bg-rose-50/20"
                     ) as p_parse_card:
-                        ui.label("P Parse").classes("text-[8px] text-rose-600")
+                        ui.label("PP:").classes("text-[8px] font-bold text-rose-600")
                         p_parse_label = ui.label("0").classes(
-                            "text-xs font-bold text-rose-900"
+                            "text-[12px] font-black text-rose-900"
                         )
 
-            # -- แถว 4: กราฟ Echarts 3 ตัวในแถวเดียวกัน --
-        with ui.card().classes(
-            "card-soft runtime-panel runtime-charts w-full shadow-sm rounded-lg overflow-hidden q-pa-none"
+            # Row 4: performance charts
+        with (
+            ui.card()
+            .tight()
+            .classes(
+                "card-soft runtime-panel runtime-charts w-full shadow-sm rounded-lg overflow-hidden border border-slate-200"
+            )
         ):
-            with ui.row().classes("w-full items-center gap-2 q-pa-none"):
-                ui.icon("show_chart", color="primary").classes("text-base")
+            # Subtle header keeps the charts visually grouped.
+            with ui.row().classes(
+                "w-full items-center gap-2 q-px-sm q-py-xs bg-slate-50 border-b border-slate-100"
+            ):
+                ui.icon("show_chart", color="primary").classes("text-sm")
                 ui.label("Performance Charts").classes(
-                    "text-sm font-bold text-slate-700"
+                    "text-[10px] font-black text-slate-500 uppercase tracking-tighter"
                 )
 
-            with ui.grid(columns=3).classes("w-full gap-2 q-px-sm"):
-                # Chart 1: GPU
-                gpu_chart = ui.echart(
-                    {
-                        "animation": False,
-                        "grid": {
-                            "left": 25,
-                            "right": 10,
-                            "top": 15,
-                            "bottom": 20,
-                        },  # บีบ margin ให้เล็กลง
-                        "xAxis": {"type": "category", "data": []},
-                        "yAxis": {"type": "value", "min": 0, "max": 100},
-                        "series": [
-                            {
-                                "name": "GPU %",
-                                "type": "line",
-                                "showSymbol": False,
-                                "data": [],
-                            }
-                        ],
-                    }
-                ).classes(
-                    "w-full h-24"
-                )  # ปรับความสูงให้เท่ากันที่ 32 (ประมาณ 128px)
+            # Three charts laid out in one row
+            with ui.grid(columns=3).classes("w-full gap-0 divide-x divide-slate-100"):
 
-                # Chart 2: Queue
-                queue_chart = ui.echart(
-                    {
-                        "animation": False,
-                        "legend": {
-                            "top": 0,
-                            "itemSize": 8,
-                            "textStyle": {"fontSize": 9},
-                        },  # ย่อขนาด Legend
-                        "grid": {"left": 25, "right": 10, "top": 25, "bottom": 20},
-                        "xAxis": {"type": "category", "data": []},
-                        "yAxis": {"type": "value", "min": 0},
-                        "series": [
-                            {
-                                "name": "detect",
-                                "type": "line",
-                                "showSymbol": False,
+                # --- Chart 1: GPU ---
+                with ui.column().classes("w-full q-pa-xs"):
+                    gpu_chart = ui.echart(
+                        {
+                            "animation": False,
+                            "grid": {"left": 25, "right": 5, "top": 10, "bottom": 20},
+                            "xAxis": {
+                                "type": "category",
                                 "data": [],
+                                "show": False,
+                            },  # Hide the X axis to save vertical space.
+                            "yAxis": {
+                                "type": "value",
+                                "min": 0,
+                                "max": 100,
+                                "axisLabel": {"fontSize": 8},
                             },
-                            {
-                                "name": "swap",
-                                "type": "line",
-                                "showSymbol": False,
-                                "data": [],
-                            },
-                            {
-                                "name": "restore",
-                                "type": "line",
-                                "showSymbol": False,
-                                "data": [],
-                            },
-                            {
-                                "name": "parse",
-                                "type": "line",
-                                "showSymbol": False,
-                                "data": [],
-                            },
-                        ],
-                    }
-                ).classes("w-full h-24")
+                            "series": [
+                                {
+                                    "name": "GPU %",
+                                    "type": "line",
+                                    "smooth": True,
+                                    "showSymbol": False,
+                                    "areaStyle": {
+                                        "opacity": 0.1
+                                    },  # Use a light fill to ground the line.
+                                    "lineStyle": {"width": 1.5, "color": "#6366f1"},
+                                    "data": [],
+                                }
+                            ],
+                        }
+                    ).classes("w-full h-24")
 
-                # Chart 3: Permit
-                permit_chart = ui.echart(
-                    {
-                        "animation": False,
-                        "legend": {
-                            "top": 0,
-                            "itemSize": 8,
-                            "textStyle": {"fontSize": 9},
-                        },
-                        "grid": {"left": 25, "right": 10, "top": 25, "bottom": 20},
-                        "xAxis": {"type": "category", "data": []},
-                        "yAxis": {"type": "value", "min": 0},
-                        "series": [
-                            {
-                                "name": "detect",
-                                "type": "line",
-                                "showSymbol": False,
-                                "data": [],
+                # --- Chart 2: Queue ---
+                with ui.column().classes("w-full q-pa-xs"):
+                    queue_chart = ui.echart(
+                        {
+                            "animation": False,
+                            "legend": {
+                                "top": 0,
+                                "itemSize": 6,
+                                "textStyle": {"fontSize": 7},
+                                "icon": "circle",
                             },
-                            {
-                                "name": "swap",
-                                "type": "line",
-                                "showSymbol": False,
-                                "data": [],
+                            "grid": {"left": 25, "right": 5, "top": 20, "bottom": 20},
+                            "xAxis": {"type": "category", "data": [], "show": False},
+                            "yAxis": {
+                                "type": "value",
+                                "min": 0,
+                                "axisLabel": {"fontSize": 8},
                             },
-                            {
-                                "name": "restore",
-                                "type": "line",
-                                "showSymbol": False,
-                                "data": [],
+                            "series": [
+                                {
+                                    "name": "det",
+                                    "type": "line",
+                                    "showSymbol": False,
+                                    "data": [],
+                                },
+                                {
+                                    "name": "swp",
+                                    "type": "line",
+                                    "showSymbol": False,
+                                    "data": [],
+                                },
+                                {
+                                    "name": "res",
+                                    "type": "line",
+                                    "showSymbol": False,
+                                    "data": [],
+                                },
+                                {
+                                    "name": "par",
+                                    "type": "line",
+                                    "showSymbol": False,
+                                    "data": [],
+                                },
+                            ],
+                        }
+                    ).classes("w-full h-24")
+
+                # --- Chart 3: Permit ---
+                with ui.column().classes("w-full q-pa-xs"):
+                    permit_chart = ui.echart(
+                        {
+                            "animation": False,
+                            "legend": {
+                                "top": 0,
+                                "itemSize": 6,
+                                "textStyle": {"fontSize": 7},
+                                "icon": "circle",
                             },
-                            {
-                                "name": "parse",
-                                "type": "line",
-                                "showSymbol": False,
-                                "data": [],
+                            "grid": {"left": 25, "right": 5, "top": 20, "bottom": 20},
+                            "xAxis": {"type": "category", "data": [], "show": False},
+                            "yAxis": {
+                                "type": "value",
+                                "min": 0,
+                                "axisLabel": {"fontSize": 8},
                             },
-                        ],
-                    }
-                ).classes("w-full h-24")
+                            "series": [
+                                {
+                                    "name": "det",
+                                    "type": "line",
+                                    "showSymbol": False,
+                                    "data": [],
+                                },
+                                {
+                                    "name": "swp",
+                                    "type": "line",
+                                    "showSymbol": False,
+                                    "data": [],
+                                },
+                                {
+                                    "name": "res",
+                                    "type": "line",
+                                    "showSymbol": False,
+                                    "data": [],
+                                },
+                                {
+                                    "name": "par",
+                                    "type": "line",
+                                    "showSymbol": False,
+                                    "data": [],
+                                },
+                            ],
+                        }
+                    ).classes("w-full h-24")
 
         with ui.card().classes(
             "card-soft runtime-panel runtime-floating-controls action-strip w-full shadow-md rounded-xl overflow-hidden"
         ):
 
-            # Action Buttons (ปุ่มควบคุม)
+            # Action buttons
             with ui.row().classes("w-full items-center gap-2"):
-                # ปุ่ม Run ใหญ่สุด เด่นสุด
+                # Primary run action
                 run_btn = ui.button(
                     "START PIPELINE", icon="play_arrow", color="primary"
                 ).classes("grow font-semibold shadow-sm text-xs")
-                # ปุ่ม Stop สัดส่วนเล็กลงมาหน่อย
+                # Secondary stop action
                 stop_btn = ui.button("STOP", icon="stop", color="negative").classes(
                     "w-24 shadow-sm text-xs"
                 )
                 stop_btn.disable()
 
-                # ปุ่มเสริม ใช้แบบ Flat ประหยัดพื้นที่
+                # Compact preview pause toggle
                 pause_preview_btn = (
                     ui.button(icon="pause_presentation", color="warning")
                     .props("flat round")
@@ -878,60 +950,77 @@ def build_main_ui(root: Any, project_root: str) -> None:
                 )
                 throughput_items_min = ui.label("0.0").classes("hidden")
 
-            # Preview Expansion (ซ่อนเนียนๆ อยู่ใต้ Progress)
+            # Preview visibility follows the preview controls.
 
-        # --- 2. Runtime Console (หน้าต่าง Log) ---
-        with ui.card().classes(
-            "card-soft runtime-panel runtime-console w-full shadow-sm rounded-xl overflow-hidden q-pa-none"
+        # --- 2. Runtime Console + Live Preview ---
+        with ui.row().classes(
+            "runtime-panel runtime-console-preview-row w-full no-wrap items-stretch gap-2"
         ):
-            # Console Header
-            with ui.row().classes(
-                "w-full items-center justify-between bg-slate-100 q-px-md q-py-sm border-b border-slate-200"
+            with ui.card().classes(
+                "card-soft runtime-console w-full shadow-sm rounded-xl overflow-hidden q-pa-none"
             ):
-                with ui.row().classes("items-center gap-2"):
-                    ui.icon("terminal", color="slate-700").classes("text-lg")
-                    ui.label("Runtime Console").classes(
-                        "text-sm font-bold text-slate-700"
+                # Console Header
+                with ui.row().classes(
+                    "w-full items-center justify-between bg-slate-100 q-px-md border-b border-slate-200"
+                ):
+                    with ui.row().classes("items-center gap-2"):
+                        ui.icon("terminal", color="slate-700").classes("text-lg")
+                        ui.label("Runtime Console").classes(
+                            "text-sm font-bold text-slate-700"
+                        )
+
+                    with ui.row().classes("items-center gap-2"):
+                        error_count_badge = ui.badge(
+                            "0 Errors", color="rose-500"
+                        ).classes("font-bold")
+                        open_error_btn = (
+                            ui.button("Inspector", icon="bug_report", color="negative")
+                            .props("flat dense")
+                            .classes("text-xs font-bold")
+                        )
+                        clear_btn = (
+                            ui.button("Clear", icon="delete_sweep", color="slate")
+                            .props("flat dense")
+                            .classes("text-xs font-bold")
+                        )
+
+                # Log viewer
+                with ui.element("div").classes("runtime-console-body w-full bg-[#1e1e1e] p-3"):
+                    log_view = ui.log(max_lines=1200).classes(
+                        "w-full h-full font-mono text-[11px] text-emerald-400 bg-transparent no-shadow leading-relaxed"
                     )
 
-                with ui.row().classes("items-center gap-2"):
-                    error_count_badge = ui.badge("0 Errors", color="rose-500").classes(
-                        "font-bold"
-                    )
-                    open_error_btn = (
-                        ui.button("Inspector", icon="bug_report", color="negative")
+            with ui.card().classes(
+                "card-soft runtime-preview runtime-preview-side shadow-sm rounded-xl overflow-hidden q-pa-none"
+            ) as preview_panel:
+                with ui.row().classes(
+                    "runtime-preview-header w-full items-center justify-between bg-slate-100 q-px-sm border-b border-slate-200"
+                ):
+                    with ui.row().classes("items-center gap-2"):
+                        ui.icon("visibility", color="slate-700").classes("text-lg")
+                        preview_title = ui.label("Live Preview").classes(
+                            "runtime-preview-title text-sm font-bold text-slate-700"
+                        )
+                    preview_toggle_btn = (
+                        ui.button("Collapse", color="secondary")
                         .props("flat dense")
                         .classes("text-xs font-bold")
                     )
-                    clear_btn = (
-                        ui.button("Clear", icon="delete_sweep", color="slate")
-                        .props("flat dense")
-                        .classes("text-xs font-bold")
-                    )
 
-            # Log Viewer (ดีไซน์แบบ Terminal จอแบน)
-            with ui.element("div").classes("w-full bg-[#1e1e1e] p-3"):
-                log_view = ui.log(max_lines=1200).classes(
-                    "w-full h-[300px] font-mono text-[11px] text-emerald-400 bg-transparent no-shadow leading-relaxed"
+                with ui.column().classes("runtime-preview-body w-full q-pa-none") as preview_body:
+                    build_preview_container(preview_dom_id)
+                preview_meta = _NoopText()
+                preview_expansion = _SideCollapseController(
+                    preview_panel,
+                    preview_body,
+                    preview_title,
+                    preview_toggle_btn,
                 )
-
-        with ui.card().classes(
-            "card-soft runtime-panel runtime-preview w-full shadow-sm rounded-xl overflow-hidden q-pa-none"
-        ):
-            with ui.expansion(
-                "Live Preview",
-                icon="visibility",
-                value=bool(defaults["preview_enabled"]),
-            ).classes(
-                "w-full bg-slate-50 border border-slate-200 rounded-lg text-sm"
-            ) as preview_expansion:
-                preview_meta = ui.label("waiting...").classes(
-                    "text-xs text-slate-500 italic q-pa-sm"
+                preview_expansion.set_value(bool(defaults["preview_enabled"]))
+                preview_toggle_btn.on_click(
+                    lambda: preview_expansion.set_value(not bool(preview_expansion.value))
                 )
-                build_preview_container(preview_dom_id)
-
-        # --- 3. Output Gallery (คลังผลลัพธ์) ---
-        # ใช้ ui.expansion เป็น Card หลักไปเลยเพื่อประหยัดพื้นที่แนวตั้ง
+        # Output gallery
         with ui.expansion("Output Gallery", icon="photo_library", value=False).classes(
             "w-full card-soft shadow-sm rounded-xl font-bold bg-white border border-slate-200"
         ):
@@ -947,7 +1036,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                         .classes("text-xs")
                     )
 
-                # Container สำหรับรูปภาพ
+                # Gallery items container
                 gallery_items = ui.row().classes("w-full gap-2")
 
         stop_confirm_refs = build_stop_confirm_dialog()
@@ -1138,9 +1227,48 @@ def register_ui_assets() -> None:
           .runtime-workspace > .runtime-health { order: 1; }
           .runtime-workspace > .runtime-queue { order: 2; }
           .runtime-workspace > .runtime-tuner { order: 3; }
-          .runtime-workspace > .runtime-console { grid-column: 1 / -1; order: 0; }
+          .runtime-workspace > .runtime-console-preview-row {
+            grid-column: 1 / -1;
+            order: 0;
+          }
+          .runtime-console-preview-row > .runtime-console {
+            flex: 1 1 0;
+            min-width: 0;
+            height: 352px;
+            display: flex;
+            flex-direction: column;
+          }
+          .runtime-console-preview-row > .runtime-preview-side {
+            flex: 1 1 0;
+            min-width: 0;
+            max-width: none;
+            height: 352px;
+            display: flex;
+            flex-direction: column;
+            transition: none;
+          }
+          .runtime-console-preview-row .runtime-console-body,
+          .runtime-console-preview-row .runtime-preview-body {
+            flex: 1 1 auto;
+            min-height: 0;
+          }
+          .runtime-console-preview-row .runtime-console-body .q-log {
+            height: 100% !important;
+          }
+          .runtime-console-preview-row > .runtime-preview-side.is-collapsed {
+            flex: 0 0 72px;
+            min-width: 72px;
+            max-width: 72px;
+          }
+          .runtime-console-preview-row > .runtime-preview-side.is-collapsed .runtime-preview-header {
+            justify-content: center;
+            padding-left: 4px;
+            padding-right: 4px;
+          }
+          .runtime-console-preview-row > .runtime-preview-side.is-collapsed .runtime-preview-title {
+            display: none;
+          }
           .runtime-workspace > .runtime-charts { grid-column: 1 / -1; order: 5; }
-          .runtime-workspace > .runtime-preview { grid-column: 1 / -1; order: 6; }
           .runtime-workspace > .runtime-floating-controls {
             grid-column: 1 / -1;
             order: 30;
@@ -1162,8 +1290,17 @@ def register_ui_assets() -> None:
             .runtime-workspace > .runtime-queue,
             .runtime-workspace > .runtime-tuner,
             .runtime-workspace > .runtime-charts,
-            .runtime-workspace > .runtime-preview {
+            .runtime-workspace > .runtime-console-preview-row {
               grid-column: 1 / -1;
+            }
+            .runtime-console-preview-row {
+              flex-direction: column;
+            }
+            .runtime-console-preview-row > .runtime-preview-side,
+            .runtime-console-preview-row > .runtime-preview-side.is-collapsed {
+              flex: 1 1 auto;
+              min-width: 0;
+              max-width: none;
             }
             .settings-rail {
               position: static;

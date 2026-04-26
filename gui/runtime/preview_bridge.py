@@ -8,9 +8,9 @@ from nicegui import ui
 def build_preview_container(preview_dom_id: str) -> None:
     ui.html(
         f"""
-        <div id=\"{preview_dom_id}\" style=\"position:relative;width:100%;height:16rem;background:#0f172a;border-radius:0.5rem;overflow:hidden;\">
-          <img id=\"{preview_dom_id}_a\" src=\"\" style=\"position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:1;transition:opacity 100ms linear;\" />
-          <img id=\"{preview_dom_id}_b\" src=\"\" style=\"position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity 100ms linear;\" />
+        <div id=\"{preview_dom_id}\" style=\"position:relative;width:100%;height:300px;background:#0f172a;border-radius:0;overflow:hidden;\">
+          <img id=\"{preview_dom_id}_a\" src=\"\" style=\"position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:1;transition:none;\" />
+          <img id=\"{preview_dom_id}_b\" src=\"\" style=\"position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;transition:none;\" />
         </div>
         """
     ).classes("w-full")
