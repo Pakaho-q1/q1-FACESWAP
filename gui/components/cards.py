@@ -42,3 +42,19 @@ def metric_card(
             ui.label(title).classes(resolved_title_classes)
             value_label = ui.label(value).classes(resolved_value_classes)
     return value_label
+
+
+def attach_card_tooltip(target: Any, message: str) -> Any:
+    """Attach tooltip to a card-like UI container and return the same target."""
+    text = str(message or "").strip()
+    if text:
+        target.tooltip(text)
+    return target
+
+
+def attach_ui_tooltip(target: Any, message: str) -> Any:
+    """Attach tooltip to any UI element and return the same target."""
+    text = str(message or "").strip()
+    if text:
+        target.tooltip(text)
+    return target

@@ -23,7 +23,7 @@ try:
     )
     from gui.actions.main_ui_logic import wire_main_ui_logic
     from gui.actions.ui_handlers import poll_handler, request_stop_handler, run_handler
-    from gui.components.cards import metric_card
+    from gui.components.cards import attach_ui_tooltip, metric_card
     from gui.components.dialogs import (
         build_error_dialog,
         build_gallery_preview_dialog,
@@ -89,7 +89,7 @@ except ImportError:
     )
     from actions.main_ui_logic import wire_main_ui_logic  # type: ignore
     from actions.ui_handlers import poll_handler, request_stop_handler, run_handler  # type: ignore
-    from components.cards import metric_card  # type: ignore
+    from components.cards import attach_ui_tooltip, metric_card  # type: ignore
     from components.dialogs import (  # type: ignore
         build_error_dialog,
         build_gallery_preview_dialog,
@@ -211,6 +211,74 @@ def build_main_ui(root: Any, project_root: str) -> None:
     preview_engine = PreviewEngine(base_fps=float(defaults["preview_fps_limit"]))
     # preview_active_layer stored in store.preview_active_layer
     preview_dom_id = f"q1_preview_{int(time.time() * 1000)}"
+    project_settings_ui_tooltips: dict[str, str] = {
+        "face_model": "Select the face model used as the source identity for swapping.",
+        "build_face_model": "Open the face model builder popup to create a new face model from prepared images.",
+        "format": "Choose processing mode: image batch or video pipeline.",
+        "input_path": "Directory containing input files to process.",
+        "output_path": "Directory where processed results will be written.",
+        "provider": "Select inference backend provider (TensorRT, CUDA, or CPU).",
+        "tuner_mode": "Controls adaptive runtime behavior for throughput and GPU utilization.",
+        "file_sorting": "Set the processing order of input files before pipeline execution starts.",
+    }
+    processing_settings_tooltips: dict[str, str] = {
+        "workers_per_stage": "Number of workers per processing stage. Higher values increase throughput but can raise resource pressure.",
+        "worker_queue_size": "Capacity of internal stage queues. Larger queues smooth bursts but use more memory.",
+        "out_queue_size": "Capacity of output queue before write/commit stage.",
+        "gpu_target_util": "Target GPU utilization for adaptive tuner decisions.",
+        "high_watermark": "Queue level threshold that triggers drain/slowdown behavior.",
+        "low_watermark": "Queue level threshold that allows normal/high-throughput behavior.",
+        "switch_cooldown_s": "Minimum delay before tuner changes mode/stage again.",
+        "max_frames": "Limit number of items processed per run. 0 means no limit.",
+        "max_retries": "Maximum retry attempts for failed items.",
+        "preview_fps_limit": "Maximum preview refresh rate to reduce UI rendering overhead.",
+    }
+    stage_controls_tooltips: dict[str, str] = {
+        "use_swaper": "Enable or disable the face swap stage.",
+        "use_restore": "Enable or disable face restoration stage.",
+        "use_parser": "Enable or disable face parser stage.",
+        "preserve_swap_eyes": "Preserve eye regions during parser blending.",
+        "preview_enabled": "Enable live preview stream during processing.",
+        "dry_run": "Validate pipeline setup without running inference.",
+        "swapper_blend": "Blend ratio for swapped face output.",
+        "restore_choice": "Select restoration model family.",
+        "restore_weight": "Model weighting for restoration strength.",
+        "restore_blend": "Final blend ratio for restored output.",
+        "parser_choice": "Select parser model implementation.",
+        "parser_mask_blur": "Blur kernel for parser mask smoothing.",
+    }
+    system_health_tooltips: dict[str, str] = {
+        "refresh": "Refresh runtime health checks and status values.",
+        "models": "Model availability status from manifest/runtime checks.",
+        "ffmpeg": "FFmpeg binary readiness status.",
+        "tensorrt": "TensorRT runtime readiness status.",
+        "disk": "Available disk capacity near workspace/output path.",
+        "writable": "Output write permission check result.",
+    }
+    job_queue_tooltips: dict[str, str] = {
+        "refresh": "Re-scan input/output folders and refresh queue counters.",
+        "image": "Number of image files found in input path.",
+        "video": "Number of video files found in input path.",
+        "selected": "Number of files matching selected format.",
+        "planned": "Items waiting to be processed.",
+        "running": "Items currently in progress.",
+        "done": "Items successfully completed.",
+        "failed": "Items failed during processing.",
+        "hint": "Live queue diagnostics and controller queue-drop metrics.",
+    }
+    tuner_live_tooltips: dict[str, str] = {
+        "gpu": "Current GPU utilization reported by runtime tuner.",
+        "mode": "Current adaptive tuner mode.",
+        "hot": "Current bottleneck stage detected by tuner.",
+        "q_detect": "Queue depth for detect stage.",
+        "q_swap": "Queue depth for swap stage.",
+        "q_restore": "Queue depth for restore stage.",
+        "q_parse": "Queue depth for parser stage.",
+        "p_detect": "Active permits allocated to detect stage.",
+        "p_swap": "Active permits allocated to swap stage.",
+        "p_restore": "Active permits allocated to restore stage.",
+        "p_parse": "Active permits allocated to parser stage.",
+    }
 
     class _NoopText:
         def set_text(self, _value: str) -> None:
@@ -272,7 +340,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
             "Project Settings",
             icon="tune",
             value=True,
-        ).classes("card-soft settings-panel settings-shell w-full"):
+        ).classes("card-soft settings-panel settings-shell w-full") as project_settings_card:
             with ui.grid(columns=1).classes("w-full gap-3"):
                 default_format = (
                     "image" if defaults["format"] not in {"video", "2"} else "video"
@@ -291,22 +359,26 @@ def build_main_ui(root: Any, project_root: str) -> None:
                         .props("clearable")
                         .classes("grow")
                     )
+                    attach_ui_tooltip(face_select, project_settings_ui_tooltips["face_model"])
                     face_build_open_btn = ui.button(
                         "Build Face Model",
                         icon="construction",
                         color="secondary",
                     ).props("dense")
+                    attach_ui_tooltip(face_build_open_btn, project_settings_ui_tooltips["build_face_model"])
                 format_select = ui.select(
                     {"image": "image", "video": "video"},
                     value=default_format,
                     label="Format",
                 )
+                attach_ui_tooltip(format_select, project_settings_ui_tooltips["format"])
                 with ui.row().classes("items-center w-full"):
                     input_path = (
                         ui.input("Input Path", value=defaults["input_path"])
                         .props("clearable")
                         .classes("grow")
                     )
+                    attach_ui_tooltip(input_path, project_settings_ui_tooltips["input_path"])
                     add_path_picker(input_path, "Select Input Folder", pick_file=False)
                 with ui.row().classes("items-center w-full"):
                     output_path = (
@@ -314,6 +386,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                         .props("clearable")
                         .classes("grow")
                     )
+                    attach_ui_tooltip(output_path, project_settings_ui_tooltips["output_path"])
                     add_path_picker(
                         output_path, "Select Output Folder", pick_file=False
                     )
@@ -322,11 +395,28 @@ def build_main_ui(root: Any, project_root: str) -> None:
                     value=defaults["provider_all"],
                     label="Provider",
                 )
+                attach_ui_tooltip(provider_all, project_settings_ui_tooltips["provider"])
                 tuner_mode = ui.select(
                     {"auto": "auto", "max_util": "max_util", "stable": "stable"},
                     value=defaults["tuner_mode"],
                     label="Tuner Mode",
                 )
+                attach_ui_tooltip(tuner_mode, project_settings_ui_tooltips["tuner_mode"])
+                file_sorting = ui.select(
+                    {
+                        "date_modified_newest": "Date Modified (Newest)",
+                        "date_modified_oldest": "Date Modified (Oldest)",
+                        "date_created_newest": "Date Created (Newest)",
+                        "date_created_oldest": "Date Created (Oldest)",
+                        "size_smallest_largest": "Size Smallest to Largest",
+                        "size_largest_smallest": "Size Largest to Smallest",
+                        "name_az": "Name (A-Z)",
+                        "name_za": "Name (Z-A)",
+                    },
+                    value=defaults["file_sorting"],
+                    label="File Sorting",
+                )
+                attach_ui_tooltip(file_sorting, project_settings_ui_tooltips["file_sorting"])
             with ui.column().classes("w-full gap-1 pt-2"):
                 validate_face_label = ui.label("").classes("text-xs")
                 validate_input_label = ui.label("").classes("text-xs")
@@ -336,47 +426,57 @@ def build_main_ui(root: Any, project_root: str) -> None:
             "Processing Settings",
             icon="tune",
             value=True,
-        ).classes("card-soft settings-panel settings-shell w-full"):
+        ).classes("card-soft settings-panel settings-shell w-full") as processing_settings_card:
             with ui.grid(columns=2).classes("w-full gap-3"):
                 workers_per_stage = ui.number(
                     "Workers/Stage", value=defaults["workers_per_stage"], min=1, max=128
                 ).props("dense outlined")
+                attach_ui_tooltip(workers_per_stage, processing_settings_tooltips["workers_per_stage"])
                 worker_queue_size = ui.number(
                     "Worker Queue", value=defaults["worker_queue_size"], min=4, max=4096
                 ).props("dense outlined")
+                attach_ui_tooltip(worker_queue_size, processing_settings_tooltips["worker_queue_size"])
                 out_queue_size = ui.number(
                     "Out Queue", value=defaults["out_queue_size"], min=8, max=8192
                 ).props("dense outlined")
+                attach_ui_tooltip(out_queue_size, processing_settings_tooltips["out_queue_size"])
                 gpu_target_util = ui.number(
                     "GPU Target Util",
                     value=defaults["gpu_target_util"],
                     min=50,
                     max=100,
                 ).props("dense outlined")
+                attach_ui_tooltip(gpu_target_util, processing_settings_tooltips["gpu_target_util"])
                 high_watermark = ui.number(
                     "High Watermark", value=defaults["high_watermark"], min=1, max=4096
                 ).props("dense outlined")
+                attach_ui_tooltip(high_watermark, processing_settings_tooltips["high_watermark"])
                 low_watermark = ui.number(
                     "Low Watermark", value=defaults["low_watermark"], min=0, max=4096
                 ).props("dense outlined")
+                attach_ui_tooltip(low_watermark, processing_settings_tooltips["low_watermark"])
                 switch_cooldown_s = ui.number(
                     "Switch Cooldown (s)",
                     value=defaults["switch_cooldown_s"],
                     min=0.0,
                     max=60.0,
                 ).props("dense outlined step=0.05")
+                attach_ui_tooltip(switch_cooldown_s, processing_settings_tooltips["switch_cooldown_s"])
                 max_frames = ui.number(
                     "Max Frames", value=defaults["max_frames"], min=0, max=999999
                 ).props("dense outlined")
+                attach_ui_tooltip(max_frames, processing_settings_tooltips["max_frames"])
                 max_retries = ui.number(
                     "Max Retries", value=defaults["max_retries"], min=1, max=20
                 ).props("dense outlined")
+                attach_ui_tooltip(max_retries, processing_settings_tooltips["max_retries"])
                 preview_fps_limit = ui.number(
                     "Preview FPS",
                     value=defaults["preview_fps_limit"],
                     min=1.0,
                     max=30.0,
                 ).props("dense outlined")
+                attach_ui_tooltip(preview_fps_limit, processing_settings_tooltips["preview_fps_limit"])
 
         # Stage controls
         with ui.expansion(
@@ -385,7 +485,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
             value=True,
         ).classes(
             "card-soft settings-panel settings-shell w-full shadow-md text-primary"
-        ):
+        ) as stage_controls_card:
 
             with ui.grid(columns=3).classes(
                 "settings-panel w-full gap-x-8 gap-y-2 items-center bg-white p-4 rounded-lg border border-slate-200"
@@ -394,6 +494,9 @@ def build_main_ui(root: Any, project_root: str) -> None:
                 use_swaper = ui.checkbox("Use Swapper", value=defaults["use_swaper"])
                 use_restore = ui.checkbox("Use Restore", value=defaults["use_restore"])
                 use_parser = ui.checkbox("Use Parser", value=defaults["use_parser"])
+                attach_ui_tooltip(use_swaper, stage_controls_tooltips["use_swaper"])
+                attach_ui_tooltip(use_restore, stage_controls_tooltips["use_restore"])
+                attach_ui_tooltip(use_parser, stage_controls_tooltips["use_parser"])
 
                 # Row 2
                 preserve_swap_eyes = ui.checkbox(
@@ -405,6 +508,9 @@ def build_main_ui(root: Any, project_root: str) -> None:
                 dry_run = ui.checkbox("Dry Run", value=defaults["dry_run"]).classes(
                     "text-rose-600"
                 )
+                attach_ui_tooltip(preserve_swap_eyes, stage_controls_tooltips["preserve_swap_eyes"])
+                attach_ui_tooltip(preview_enabled, stage_controls_tooltips["preview_enabled"])
+                attach_ui_tooltip(dry_run, stage_controls_tooltips["dry_run"])
 
             # Per-stage settings
             with ui.column().classes("w-full gap-4"):
@@ -423,6 +529,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                             .props("dense outlined step=0.05")
                             .classes("w-full")
                         )
+                        attach_ui_tooltip(swapper_blend, stage_controls_tooltips["swapper_blend"])
 
                 # --- Restore Section ---
                 with ui.column().classes("w-full gap-2") as restore_settings_panel:
@@ -442,6 +549,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                             .props("dense outlined")
                             .classes("w-full")
                         )
+                        attach_ui_tooltip(restore_choice, stage_controls_tooltips["restore_choice"])
 
                         restore_weight = (
                             ui.number(
@@ -453,6 +561,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                             .props("dense outlined step=0.05")
                             .classes("w-full")
                         )
+                        attach_ui_tooltip(restore_weight, stage_controls_tooltips["restore_weight"])
 
                         restore_blend = (
                             ui.number(
@@ -464,6 +573,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                             .props("dense outlined step=0.05")
                             .classes("w-full")
                         )
+                        attach_ui_tooltip(restore_blend, stage_controls_tooltips["restore_blend"])
 
                 # --- Parser Section ---
                 with ui.column().classes("w-full gap-2") as parser_settings_panel:
@@ -477,6 +587,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                             .props("dense outlined")
                             .classes("w-full")
                         )
+                        attach_ui_tooltip(parser_choice, stage_controls_tooltips["parser_choice"])
 
                         parser_mask_blur = (
                             ui.number(
@@ -488,10 +599,11 @@ def build_main_ui(root: Any, project_root: str) -> None:
                             .props("dense outlined")
                             .classes("w-full")
                         )
+                        attach_ui_tooltip(parser_mask_blur, stage_controls_tooltips["parser_mask_blur"])
 
         with ui.card().classes(
             "card-soft runtime-panel runtime-summary runtime-summary-card runtime-health w-full shadow-sm rounded-lg"
-        ):
+        ) as system_health_card:
             with ui.row().classes(
                 "panel-header panel-header-compact w-full items-center justify-between"
             ):
@@ -506,6 +618,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                     .props("flat dense size=sm")
                     .classes("text-slate-400")
                 )
+                attach_ui_tooltip(refresh_health_btn, system_health_tooltips["refresh"])
 
             # Main content container
             with ui.column().classes("panel-body panel-body-compact w-full gap-1"):
@@ -523,6 +636,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                         health_models = ui.label("-").classes(
                             "text-[12px] font-black text-violet-900"
                         )
+                        attach_ui_tooltip(health_models, system_health_tooltips["models"])
 
                     # 2. FFmpeg
                     with ui.row().classes(
@@ -533,6 +647,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                         health_ffmpeg = ui.label("-").classes(
                             "text-[12px] font-black text-cyan-900"
                         )
+                        attach_ui_tooltip(health_ffmpeg, system_health_tooltips["ffmpeg"])
 
                     # 3. TensorRT
                     with ui.row().classes(
@@ -543,6 +658,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                         health_tensorrt = ui.label("-").classes(
                             "text-[12px] font-black text-sky-900"
                         )
+                        attach_ui_tooltip(health_tensorrt, system_health_tooltips["tensorrt"])
 
                 # Bottom row: disk and writable output
                 with ui.grid(columns=2).classes("w-full gap-1"):
@@ -555,6 +671,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                         health_disk = ui.label("-").classes(
                             "text-[12px] font-black text-amber-900"
                         )
+                        attach_ui_tooltip(health_disk, system_health_tooltips["disk"])
 
                     # 5. Writable Output
                     with ui.row().classes(
@@ -567,6 +684,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                         health_writable = ui.label("-").classes(
                             "text-[12px] font-black text-emerald-900"
                         )
+                        attach_ui_tooltip(health_writable, system_health_tooltips["writable"])
 
             # Error Label
             health_missing = ui.label("").classes(
@@ -575,7 +693,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
 
         with ui.card().classes(
             "card-soft runtime-panel runtime-summary runtime-summary-card runtime-queue w-full shadow-sm rounded-lg"
-        ):
+        ) as job_queue_card:
             with ui.row().classes(
                 "panel-header panel-header-compact w-full items-center justify-between"
             ):
@@ -587,6 +705,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                 refresh_queue_btn = ui.button(icon="sync", color="secondary").props(
                     "flat dense size=sm"
                 )
+                attach_ui_tooltip(refresh_queue_btn, job_queue_tooltips["refresh"])
 
             with ui.column().classes("panel-body panel-body-compact w-full gap-1"):
                 # Top row: media types
@@ -599,6 +718,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                         queue_image = ui.label("0").classes(
                             "text-[10px] font-black text-blue-900"
                         )
+                        attach_ui_tooltip(queue_image, job_queue_tooltips["image"])
                     # Video Jobs
                     with ui.row().classes(
                         "items-center justify-between q-px-xs border border-rose-100 rounded bg-rose-50/30"
@@ -607,6 +727,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                         queue_video = ui.label("0").classes(
                             "text-[10px] font-black text-rose-900"
                         )
+                        attach_ui_tooltip(queue_video, job_queue_tooltips["video"])
                     # Selected
                     with ui.row().classes(
                         "items-center justify-between q-px-xs border border-slate-100 rounded bg-slate-50/30"
@@ -615,6 +736,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                         queue_selected = ui.label("0").classes(
                             "text-[10px] font-black text-slate-900"
                         )
+                        attach_ui_tooltip(queue_selected, job_queue_tooltips["selected"])
 
                 # Bottom row: job status
                 with ui.grid(columns=4).classes("w-full gap-1"):
@@ -628,6 +750,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                         queue_planned_status = ui.label("0").classes(
                             "text-[10px] font-bold text-slate-600"
                         )
+                        attach_ui_tooltip(queue_planned_status, job_queue_tooltips["planned"])
                     # Running
                     with ui.column().classes(
                         "items-center gap-0 border border-blue-100 rounded q-pa-none bg-white"
@@ -638,6 +761,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                         queue_running_status = ui.label("0").classes(
                             "text-[10px] font-bold text-blue-600"
                         )
+                        attach_ui_tooltip(queue_running_status, job_queue_tooltips["running"])
                     # Done
                     with ui.column().classes(
                         "items-center gap-0 border border-emerald-100 rounded q-pa-none bg-white"
@@ -648,6 +772,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                         queue_done_status = ui.label("0").classes(
                             "text-[10px] font-bold text-emerald-600"
                         )
+                        attach_ui_tooltip(queue_done_status, job_queue_tooltips["done"])
                     # Failed
                     with ui.column().classes(
                         "items-center gap-0 border border-rose-100 rounded q-pa-none bg-white"
@@ -658,15 +783,17 @@ def build_main_ui(root: Any, project_root: str) -> None:
                         queue_failed_status = ui.label("0").classes(
                             "text-[10px] font-bold text-rose-600"
                         )
+                        attach_ui_tooltip(queue_failed_status, job_queue_tooltips["failed"])
 
                 queue_hint = ui.label("Preview checks input path only.").classes(
                     "text-[8px] text-slate-400 italic q-px-xs"
                 )
+                attach_ui_tooltip(queue_hint, job_queue_tooltips["hint"])
 
         # --- Section: Tuner Live ---
         with ui.card().classes(
             "card-soft runtime-panel runtime-summary runtime-summary-card runtime-tuner w-full shadow-sm rounded-lg"
-        ):
+        ) as tuner_live_card:
             with ui.row().classes(
                 "panel-header panel-header-compact w-full items-center gap-1"
             ):
@@ -687,6 +814,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                     tuner_gpu = ui.label("0%").classes(
                         "text-[10px] font-black text-indigo-900"
                     )
+                    attach_ui_tooltip(tuner_gpu, tuner_live_tooltips["gpu"])
                 # Mode
                 with ui.row().classes(
                     "items-center justify-between q-px-xs border border-emerald-100 rounded bg-emerald-50/30"
@@ -695,6 +823,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                     tuner_mode_live = ui.label("norm").classes(
                         "text-[10px] font-black text-emerald-900"
                     )
+                    attach_ui_tooltip(tuner_mode_live, tuner_live_tooltips["mode"])
                 # Hot Stage
                 with ui.row().classes(
                     "items-center justify-between q-px-xs border border-amber-100 rounded bg-amber-50/30"
@@ -703,6 +832,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                     tuner_hot = ui.label("-").classes(
                         "text-[10px] font-black text-amber-900"
                     )
+                    attach_ui_tooltip(tuner_hot, tuner_live_tooltips["hot"])
 
                 # Rows 2-3: queue and permit mini-badges
             with ui.column().classes("panel-body panel-body-compact w-full gap-1"):
@@ -715,6 +845,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                         q_detect_label = ui.label("0").classes(
                             "text-[12px] font-black text-blue-900"
                         )
+                        attach_ui_tooltip(q_detect_label, tuner_live_tooltips["q_detect"])
                     with ui.row().classes(
                         "items-center no-wrap gap-1 q-px-xs border border-orange-100 rounded bg-orange-50/20"
                     ) as q_swap_card:
@@ -722,6 +853,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                         q_swap_label = ui.label("0").classes(
                             "text-[12px] font-black text-orange-900"
                         )
+                        attach_ui_tooltip(q_swap_label, tuner_live_tooltips["q_swap"])
                     with ui.row().classes(
                         "items-center no-wrap gap-1 q-px-xs border border-green-100 rounded bg-green-50/20"
                     ) as q_restore_card:
@@ -729,6 +861,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                         q_restore_label = ui.label("0").classes(
                             "text-[12px] font-black text-green-900"
                         )
+                        attach_ui_tooltip(q_restore_label, tuner_live_tooltips["q_restore"])
                     with ui.row().classes(
                         "items-center no-wrap gap-1 q-px-xs border border-rose-100 rounded bg-rose-50/20"
                     ) as q_parse_card:
@@ -736,6 +869,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                         q_parse_label = ui.label("0").classes(
                             "text-[12px] font-black text-rose-900"
                         )
+                        attach_ui_tooltip(q_parse_label, tuner_live_tooltips["q_parse"])
 
                 # P Series
                 with ui.grid(columns=4).classes("w-full gap-1"):
@@ -746,6 +880,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                         p_detect_label = ui.label("0").classes(
                             "text-[12px] font-black text-blue-900"
                         )
+                        attach_ui_tooltip(p_detect_label, tuner_live_tooltips["p_detect"])
                     with ui.row().classes(
                         "items-center no-wrap gap-1 q-px-xs border border-orange-100 rounded bg-orange-50/20"
                     ) as p_swap_card:
@@ -753,6 +888,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                         p_swap_label = ui.label("0").classes(
                             "text-[12px] font-black text-orange-900"
                         )
+                        attach_ui_tooltip(p_swap_label, tuner_live_tooltips["p_swap"])
                     with ui.row().classes(
                         "items-center no-wrap gap-1 q-px-xs border border-green-100 rounded bg-green-50/20"
                     ) as p_restore_card:
@@ -760,6 +896,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                         p_restore_label = ui.label("0").classes(
                             "text-[12px] font-black text-green-900"
                         )
+                        attach_ui_tooltip(p_restore_label, tuner_live_tooltips["p_restore"])
                     with ui.row().classes(
                         "items-center no-wrap gap-1 q-px-xs border border-rose-100 rounded bg-rose-50/20"
                     ) as p_parse_card:
@@ -767,6 +904,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                         p_parse_label = ui.label("0").classes(
                             "text-[12px] font-black text-rose-900"
                         )
+                        attach_ui_tooltip(p_parse_label, tuner_live_tooltips["p_parse"])
 
             # Row 4: performance charts
         with (

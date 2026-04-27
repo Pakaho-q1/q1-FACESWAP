@@ -6,6 +6,16 @@ from typing import Any
 _ALLOWED_FORMATS = {"image", "video"}
 _ALLOWED_PROVIDER = {"cpu", "cuda", "trt"}
 _ALLOWED_TUNER = {"auto", "max_util", "stable"}
+_ALLOWED_FILE_SORTING = {
+    "date_modified_newest",
+    "date_modified_oldest",
+    "date_created_newest",
+    "date_created_oldest",
+    "size_smallest_largest",
+    "size_largest_smallest",
+    "name_az",
+    "name_za",
+}
 
 
 def validate_run_config(values: dict[str, Any]) -> tuple[list[str], list[str]]:
@@ -31,6 +41,10 @@ def validate_run_config(values: dict[str, Any]) -> tuple[list[str], list[str]]:
     tuner_mode = str(values.get("tuner_mode", "")).strip().lower()
     if tuner_mode not in _ALLOWED_TUNER:
         errors.append("tuner_mode must be one of: auto, max_util, stable")
+
+    file_sorting = str(values.get("file_sorting", "")).strip().lower()
+    if file_sorting not in _ALLOWED_FILE_SORTING:
+        errors.append("file_sorting is invalid")
 
     def _as_int(key: str, minimum: int, maximum: int | None = None) -> int | None:
         raw = values.get(key)

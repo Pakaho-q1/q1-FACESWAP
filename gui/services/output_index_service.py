@@ -52,6 +52,8 @@ class OutputIndexService:
         self._lock = threading.Lock()
         self._executor: concurrent.futures.Executor = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="output-index-scan")
         self._future: concurrent.futures.Future[list[tuple[str, str, float, int, str]]] | None = None
+        self._executor_restarting = False
+        self._executor_restart_thread: threading.Thread | None = None
         self._scan_path = ""
         self._scan_started_at = 0.0
         self._scan_seq = 0
@@ -115,19 +117,50 @@ class OutputIndexService:
         with self._lock:
             future = self._future
             self._future = None
+            self._executor_restarting = False
         if future is not None:
             try:
                 future.cancel()
             except Exception:
                 pass
+        restart_thread = self._executor_restart_thread
+        if restart_thread is not None and restart_thread.is_alive():
+            restart_thread.join(timeout=2.0)
         self._executor.shutdown(wait=True, cancel_futures=True)
 
     def _restart_executor(self) -> None:
         try:
-            self._executor.shutdown(wait=False, cancel_futures=True)
+            self._executor.shutdown(wait=True, cancel_futures=True)
         except Exception:
             pass
         self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="output-index-scan")
+
+    def _start_executor_restart(self) -> None:
+        with self._lock:
+            if self._executor_restarting:
+                return
+            self._executor_restarting = True
+            self._executor_restart_thread = threading.Thread(
+                target=self._restart_executor_worker,
+                daemon=True,
+                name="output-index-restart",
+            )
+            self._executor_restart_thread.start()
+
+    def _restart_executor_worker(self) -> None:
+        try:
+            self._restart_executor()
+        finally:
+            pending_path = ""
+            pending_force = False
+            with self._lock:
+                self._executor_restarting = False
+                pending_path = self._scheduled_path
+                pending_force = bool(self._scheduled_force)
+                self._scheduled_path = ""
+                self._scheduled_force = False
+            if pending_path:
+                self.request_scan(pending_path, force=pending_force)
 
     def _index_stats(self, output_path: str) -> tuple[float, float]:
         with self._db() as conn:
@@ -146,6 +179,10 @@ class OutputIndexService:
         if not os.path.isdir(norm_path):
             return False
         with self._lock:
+            if self._executor_restarting:
+                self._scheduled_path = norm_path
+                self._scheduled_force = self._scheduled_force or bool(force)
+                return False
             if self._future is not None and not self._future.done():
                 self._scheduled_path = norm_path
                 self._scheduled_force = self._scheduled_force or bool(force)
@@ -177,10 +214,11 @@ class OutputIndexService:
                         last_error=f"scan_timeout:{timeout_s:.1f}s",
                     )
                     self._future = None
+                    self._scheduled_path = self._scheduled_path or self._scan_path
+                    self._scheduled_force = True
                     self._scan_path = ""
                     self._scan_started_at = 0.0
-                    self._restart_executor()
-                    self._maybe_schedule_pending()
+                    self._start_executor_restart()
                 return
             if self._future is None or not self._future.done():
                 return

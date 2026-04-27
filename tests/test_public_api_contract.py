@@ -37,6 +37,7 @@ class PublicApiContractTests(unittest.TestCase):
             worker_queue_size=1,
             out_queue_size=1,
             tuner_mode="auto",
+            file_sorting="date_modified_newest",
             gpu_target_util=10,
             high_watermark=1,
             low_watermark=2,

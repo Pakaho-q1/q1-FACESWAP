@@ -24,25 +24,34 @@ SOURCE_ASSETS_DIR = PROJECT_ROOT / "assets"
 USER_HOME = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))).expanduser()
 FALLBACK_SETTINGS_ROOT = USER_HOME / "q1-faceswap"
 FALLBACK_SETTINGS_PATH = FALLBACK_SETTINGS_ROOT / "settings.json"
-_OUTPUT_INDEX_SERVICE: OutputIndexService | None = None
+_OUTPUT_INDEX_SERVICES: dict[str, OutputIndexService] = {}
 
 
 def _get_output_index_service(project_root: str) -> OutputIndexService:
-    global _OUTPUT_INDEX_SERVICE
-    if _OUTPUT_INDEX_SERVICE is None:
-        layout = build_layout(project_root)
+    normalized_root = normalize_project_root(str(project_root or ""))
+    svc = _OUTPUT_INDEX_SERVICES.get(normalized_root)
+    if svc is None:
+        layout = build_layout(normalized_root)
         runtime_dir = Path(layout.assets_dir) / "runtime"
         runtime_dir.mkdir(parents=True, exist_ok=True)
         db_path = runtime_dir / "output_index.sqlite3"
-        _OUTPUT_INDEX_SERVICE = OutputIndexService(str(db_path))
-    return _OUTPUT_INDEX_SERVICE
+        svc = OutputIndexService(str(db_path))
+        _OUTPUT_INDEX_SERVICES[normalized_root] = svc
+    return svc
 
 
-def shutdown_output_index_service() -> None:
-    global _OUTPUT_INDEX_SERVICE
-    if _OUTPUT_INDEX_SERVICE is not None:
-        _OUTPUT_INDEX_SERVICE.shutdown()
-        _OUTPUT_INDEX_SERVICE = None
+def shutdown_output_index_service(project_root: str = "") -> None:
+    if project_root:
+        normalized_root = normalize_project_root(str(project_root))
+        svc = _OUTPUT_INDEX_SERVICES.pop(normalized_root, None)
+        if svc is not None:
+            svc.shutdown()
+        return
+
+    for key in list(_OUTPUT_INDEX_SERVICES.keys()):
+        svc = _OUTPUT_INDEX_SERVICES.pop(key, None)
+        if svc is not None:
+            svc.shutdown()
 
 
 def detect_requires_project_path() -> bool:

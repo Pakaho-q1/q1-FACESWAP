@@ -68,6 +68,37 @@ class OutputIndexServiceTests(unittest.TestCase):
             finally:
                 service.shutdown()
 
+    def test_gallery_page_is_sorted_by_mtime_newest_first(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            out_dir = root / "output"
+            out_dir.mkdir(parents=True, exist_ok=True)
+            db_path = root / "runtime" / "idx.sqlite3"
+            p1 = out_dir / "old.jpg"
+            p2 = out_dir / "mid.jpg"
+            p3 = out_dir / "new.jpg"
+            p1.write_bytes(b"1")
+            p2.write_bytes(b"2")
+            p3.write_bytes(b"3")
+            now = time.time()
+            p1_ts = now - 30
+            p2_ts = now - 20
+            p3_ts = now - 10
+            p1.touch()
+            p2.touch()
+            p3.touch()
+            import os
+            os.utime(p1, (p1_ts, p1_ts))
+            os.utime(p2, (p2_ts, p2_ts))
+            os.utime(p3, (p3_ts, p3_ts))
+            service = OutputIndexService(str(db_path), stale_seconds=1.0)
+            try:
+                payload = self._wait_index_ready(service, out_dir, min_total=3)
+                names = [str(row.get("name", "")) for row in list(payload.get("rows", []))]
+                self.assertEqual(names[:3], ["new.jpg", "mid.jpg", "old.jpg"])
+            finally:
+                service.shutdown()
+
 
 if __name__ == "__main__":
     unittest.main()

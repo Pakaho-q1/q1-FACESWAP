@@ -19,6 +19,8 @@ except ImportError:
 
 
 class PipelineController:
+    _TERMINAL_KINDS = {"done", "stopped", "error"}
+
     def __init__(self, state: AppStore | None = None) -> None:
         # allow injection of AppStore (SSOT)
         self.state = state or AppStore()
@@ -27,6 +29,8 @@ class PipelineController:
         self._stdout_thread: threading.Thread | None = None
         self._stderr_thread: threading.Thread | None = None
         self._proc: subprocess.Popen[str] | None = None
+        self._stop_thread: threading.Thread | None = None
+        self._stop_lock = threading.Lock()
         self._dropped_log_events = 0
         self._dropped_nonlog_events = 0
         self._last_metrics_emit = 0.0
@@ -43,23 +47,51 @@ class PipelineController:
         self._progress_re = re.compile(r"(?P<done>\d+)\s*/\s*(?P<total>\d+)")
         self._ansi_re = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
         self._gui_prefix = "__Q1_GUI__"
+        self._synthetic_terminal_sent = False
+
+    @classmethod
+    def _is_terminal_kind(cls, kind: str) -> bool:
+        return str(kind).strip().lower() in cls._TERMINAL_KINDS
+
+    @staticmethod
+    def _is_log_kind(kind: str) -> bool:
+        return str(kind).strip().lower() == "log"
+
+    def _drop_one_non_terminal_event(self) -> bool:
+        drained: list[tuple[str, Any]] = []
+        dropped = False
+        while True:
+            try:
+                item = self.event_q.get_nowait()
+            except queue.Empty:
+                break
+            item_kind = str(item[0])
+            if not dropped and not self._is_terminal_kind(item_kind):
+                dropped = True
+                self._dropped_nonlog_events += 1
+                continue
+            drained.append(item)
+        for replay in drained:
+            try:
+                self.event_q.put_nowait(replay)
+            except queue.Full:
+                self._dropped_nonlog_events += 1
+                break
+        return dropped
 
     def _push_event(self, kind: str, payload: Any) -> None:
+        normalized_kind = str(kind)
         try:
-            self.event_q.put_nowait((kind, payload))
+            self.event_q.put_nowait((normalized_kind, payload))
             return
         except queue.Full:
             pass
-        if kind == "log":
+        if self._is_log_kind(normalized_kind):
             self._dropped_log_events += 1
             return
+        _ = self._drop_one_non_terminal_event()
         try:
-            _ = self.event_q.get_nowait()
-            self._dropped_nonlog_events += 1
-        except queue.Empty:
-            pass
-        try:
-            self.event_q.put_nowait((kind, payload))
+            self.event_q.put_nowait((normalized_kind, payload))
         except queue.Full:
             self._dropped_nonlog_events += 1
 
@@ -86,6 +118,8 @@ class PipelineController:
             str(values["out_queue_size"]),
             "--tuner-mode",
             values["tuner_mode"],
+            "--file-sorting",
+            values.get("file_sorting", "date_modified_newest"),
             "--gpu-target-util",
             str(values["gpu_target_util"]),
             "--high-watermark",
@@ -394,6 +428,7 @@ class PipelineController:
         self.state.stop_requested = False
         self.state.total = 0
         self.state.done = 0
+        self._synthetic_terminal_sent = False
         self.state.stop_event = threading.Event()
         self._worker_thread = threading.Thread(
             target=self._worker,
@@ -412,7 +447,15 @@ class PipelineController:
         proc = self._proc
         if proc is not None and proc.poll() is None:
             self._push_event("log", f"Stopping process pid={proc.pid} (graceful first)...")
-            self._stop_process_tree(proc)
+            with self._stop_lock:
+                if self._stop_thread is None or not self._stop_thread.is_alive():
+                    self._stop_thread = threading.Thread(
+                        target=self._stop_process_tree,
+                        args=(proc,),
+                        daemon=True,
+                        name="gui-stop-worker",
+                    )
+                    self._stop_thread.start()
         return True
 
     def finish(self) -> None:
@@ -423,6 +466,7 @@ class PipelineController:
         self._proc = None
         self._stdout_thread = None
         self._stderr_thread = None
+        self._stop_thread = None
 
     def poll_events(self) -> list[tuple[str, Any]]:
         events: list[tuple[str, Any]] = []
@@ -433,16 +477,19 @@ class PipelineController:
             except queue.Empty:
                 break
         # If worker died without terminal event, surface a synthetic error so UI unlocks.
+        has_terminal = any(self._is_terminal_kind(str(kind)) for kind, _ in events)
+        if has_terminal:
+            self._synthetic_terminal_sent = True
         if (
-            not events
+            not self._synthetic_terminal_sent
             and self.state.running
             and self._worker_thread is not None
             and not self._worker_thread.is_alive()
+            and not has_terminal
         ):
+            self._synthetic_terminal_sent = True
             if self.state.stop_requested:
-                events.append(
-                    ("stopped", {"reason": "user_stop", "details": "Worker stopped"})
-                )
+                events.append(("stopped", {"reason": "user_stop", "details": "Worker stopped"}))
             else:
                 events.append(("error", "Worker exited unexpectedly"))
         now = time.monotonic()

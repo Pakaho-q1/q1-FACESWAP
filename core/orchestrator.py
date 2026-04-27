@@ -21,6 +21,7 @@ class JobPlan:
     models_dir: str
     temp_audio_dir: str
     ffmpeg_cmd: str
+    file_sorting: str
     skip_existing: bool
     max_frames: int
     face_name: str
@@ -128,6 +129,7 @@ def build_plan(ctx: RuntimeContext) -> JobPlan:
         models_dir=run_cfg.models_dir,
         temp_audio_dir=run_cfg.temp_audio_dir,
         ffmpeg_cmd=run_cfg.ffmpeg_cmd,
+        file_sorting=run_cfg.file_sorting,
         skip_existing=run_cfg.skip_existing,
         max_frames=run_cfg.max_frames,
         face_name=run_cfg.face_name,
@@ -138,12 +140,47 @@ def build_plan(ctx: RuntimeContext) -> JobPlan:
     )
 
 
+def _sort_input_rows(
+    rows: List[Tuple[str, float, float, int]],
+    sorting: str,
+) -> List[Tuple[str, float, float, int]]:
+    mode = str(sorting or "date_modified_newest").strip().lower()
+    if mode == "date_modified_oldest":
+        return sorted(rows, key=lambda x: (x[1], x[0].casefold()))
+    if mode == "date_created_newest":
+        return sorted(rows, key=lambda x: (-x[2], x[0].casefold()))
+    if mode == "date_created_oldest":
+        return sorted(rows, key=lambda x: (x[2], x[0].casefold()))
+    if mode == "size_smallest_largest":
+        return sorted(rows, key=lambda x: (x[3], x[0].casefold()))
+    if mode == "size_largest_smallest":
+        return sorted(rows, key=lambda x: (-x[3], x[0].casefold()))
+    if mode == "name_az":
+        return sorted(rows, key=lambda x: x[0].casefold())
+    if mode == "name_za":
+        return sorted(rows, key=lambda x: x[0].casefold(), reverse=True)
+    return sorted(rows, key=lambda x: (-x[1], x[0].casefold()))
+
+
+def _discover_input_rows(plan: JobPlan, extensions: tuple[str, ...]) -> List[Tuple[str, float, float, int]]:
+    rows: List[Tuple[str, float, float, int]] = []
+    with os.scandir(plan.input_path) as entries:
+        for entry in entries:
+            if not entry.is_file():
+                continue
+            if not entry.name.lower().endswith(extensions):
+                continue
+            try:
+                stat = entry.stat()
+            except OSError:
+                continue
+            rows.append((entry.name, float(stat.st_mtime), float(stat.st_ctime), int(stat.st_size)))
+    return _sort_input_rows(rows, plan.file_sorting)
+
+
 def discover_image_work(plan: JobPlan) -> List[ImageWorkItem]:
-    image_files = [
-        f
-        for f in os.listdir(plan.input_path)
-        if f.lower().endswith((".png", ".jpg", ".jpeg"))
-    ]
+    image_rows = _discover_input_rows(plan, (".png", ".jpg", ".jpeg"))
+    image_files = [name for (name, _mtime, _ctime, _size) in image_rows]
     if plan.skip_existing:
         existing_outputs = set(os.listdir(plan.output_path))
         image_files = [
@@ -163,15 +200,8 @@ def discover_image_work(plan: JobPlan) -> List[ImageWorkItem]:
 
 
 def discover_video_work(plan: JobPlan) -> List[VideoWorkItem]:
-    video_files = [
-        f
-        for f in os.listdir(plan.input_path)
-        if f.lower().endswith((".mp4", ".mkv", ".avi", ".mov"))
-    ]
-    ordered: List[Tuple[str, int]] = sorted(
-        [(f, os.path.getsize(os.path.join(plan.input_path, f))) for f in video_files],
-        key=lambda x: x[1],
-    )
+    video_rows = _discover_input_rows(plan, (".mp4", ".mkv", ".avi", ".mov"))
+    ordered: List[Tuple[str, int]] = [(name, size) for (name, _mtime, _ctime, size) in video_rows]
     if plan.skip_existing:
         existing_outputs = set(os.listdir(plan.output_path))
         ordered = [

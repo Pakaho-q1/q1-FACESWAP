@@ -37,6 +37,7 @@ class GuiDefaults:
     output_suffix: str
     provider_all: str
     tuner_mode: str
+    file_sorting: str
     workers_per_stage: int
     worker_queue_size: int
     out_queue_size: int
@@ -70,6 +71,7 @@ class GuiDefaults:
             "output_suffix": self.output_suffix,
             "provider_all": self.provider_all,
             "tuner_mode": self.tuner_mode,
+            "file_sorting": self.file_sorting,
             "workers_per_stage": self.workers_per_stage,
             "worker_queue_size": self.worker_queue_size,
             "out_queue_size": self.out_queue_size,

@@ -58,6 +58,7 @@ class RunConfig:
     worker_queue_size: int
     out_queue_size: int
     tuner_mode: str
+    file_sorting: str
     gpu_target_util: int
     high_watermark: int
     low_watermark: int
@@ -147,6 +148,17 @@ def validate_run_config(run_config: RunConfig) -> None:
         raise ConfigError("worker_queue_size must be in range [4, 4096]")
     if run_config.out_queue_size < 8 or run_config.out_queue_size > 8192:
         raise ConfigError("out_queue_size must be in range [8, 8192]")
+    if run_config.file_sorting not in {
+        "date_modified_newest",
+        "date_modified_oldest",
+        "date_created_newest",
+        "date_created_oldest",
+        "size_smallest_largest",
+        "size_largest_smallest",
+        "name_az",
+        "name_za",
+    }:
+        raise ConfigError("file_sorting is invalid")
     if run_config.gpu_target_util < 50 or run_config.gpu_target_util > 100:
         raise ConfigError("gpu_target_util must be in range [50, 100]")
     if run_config.high_watermark < 1:
@@ -216,6 +228,7 @@ def build_run_config_from_cfg(cfg_module) -> RunConfig:
         worker_queue_size=cfg_module.WORKER_QUEUE_SIZE,
         out_queue_size=cfg_module.OUT_QUEUE_SIZE,
         tuner_mode=cfg_module.TUNER_MODE,
+        file_sorting=cfg_module.FILE_SORTING,
         gpu_target_util=cfg_module.GPU_TARGET_UTIL,
         high_watermark=cfg_module.HIGH_WATERMARK,
         low_watermark=cfg_module.LOW_WATERMARK,

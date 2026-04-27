@@ -108,6 +108,7 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
     output_path = ctx["output_path"]
     provider_all = ctx["provider_all"]
     tuner_mode = ctx["tuner_mode"]
+    file_sorting = ctx["file_sorting"]
     workers_per_stage = ctx["workers_per_stage"]
     worker_queue_size = ctx["worker_queue_size"]
     out_queue_size = ctx["out_queue_size"]
@@ -855,6 +856,7 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
             "output_path": output_path.value or "",
             "provider_all": provider_all.value or "trt",
             "tuner_mode": tuner_mode.value or "auto",
+            "file_sorting": str(file_sorting.value or "date_modified_newest"),
             "workers_per_stage": int(workers_per_stage.value or 8),
             "worker_queue_size": int(worker_queue_size.value or 64),
             "out_queue_size": int(out_queue_size.value or 128),
@@ -1107,6 +1109,7 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
     format_select.on_value_change(
         lambda _e: (set_queue_preview(), update_job_queue_status(), update_throughput())
     )
+    file_sorting.on_value_change(lambda _e: set_queue_preview())
     provider_all.on_value_change(
         lambda _e: (
             set_health(),
@@ -1140,6 +1143,7 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
         output_path,
         provider_all,
         tuner_mode,
+        file_sorting,
         workers_per_stage,
         worker_queue_size,
         out_queue_size,
@@ -1200,4 +1204,4 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
     app.on_shutdown(lambda: autosave_coordinator.shutdown())
     shutdown_output_index_service = ctx.get("shutdown_output_index_service")
     if callable(shutdown_output_index_service):
-        app.on_shutdown(lambda: shutdown_output_index_service())
+        app.on_shutdown(lambda: shutdown_output_index_service(project_root))

@@ -1,10 +1,17 @@
 import os
 import tempfile
 import unittest
+from dataclasses import replace
 
 from core.io_image import process_images
 from core.io_video import process_videos
-from core.orchestrator import build_video_output_paths, run_job
+from core.orchestrator import (
+    build_plan,
+    build_video_output_paths,
+    discover_image_work,
+    discover_video_work,
+    run_job,
+)
 from core.pipeline_state import create_pipeline_state
 from core.errors import PipelineError
 from core.types import ProviderPolicy, RunConfig, RuntimeContext
@@ -38,6 +45,7 @@ def _build_run_config(*, format_is_image: bool, input_path: str, output_dir: str
         worker_queue_size=8,
         out_queue_size=8,
         tuner_mode="auto",
+        file_sorting="date_modified_newest",
         gpu_target_util=90,
         high_watermark=12,
         low_watermark=4,
@@ -136,6 +144,37 @@ class PipelineSingleSourceOfTruthTests(unittest.TestCase):
                 ffmpeg_cmd=None,
                 pipeline_state=state,
             )
+
+    def test_image_work_respects_name_desc_sorting(self):
+        with tempfile.TemporaryDirectory() as td:
+            in_dir = os.path.join(td, "in")
+            out_dir = os.path.join(td, "out")
+            os.makedirs(in_dir, exist_ok=True)
+            os.makedirs(out_dir, exist_ok=True)
+            for name in ["a.jpg", "c.jpg", "b.jpg"]:
+                with open(os.path.join(in_dir, name), "wb") as f:
+                    f.write(b"x")
+            cfg = _build_run_config(format_is_image=True, input_path=in_dir, output_dir=out_dir)
+            cfg = replace(cfg, file_sorting="name_za")
+            plan = build_plan(RuntimeContext(config=cfg))
+            items = discover_image_work(plan)
+            self.assertEqual([item.filename for item in items], ["c.jpg", "b.jpg", "a.jpg"])
+
+    def test_video_work_respects_size_desc_sorting(self):
+        with tempfile.TemporaryDirectory() as td:
+            in_dir = os.path.join(td, "in")
+            out_dir = os.path.join(td, "out")
+            os.makedirs(in_dir, exist_ok=True)
+            os.makedirs(out_dir, exist_ok=True)
+            sizes = {"a.mp4": 1, "b.mp4": 3, "c.mp4": 2}
+            for name, size in sizes.items():
+                with open(os.path.join(in_dir, name), "wb") as f:
+                    f.write(b"x" * size)
+            cfg = _build_run_config(format_is_image=False, input_path=in_dir, output_dir=out_dir)
+            cfg = replace(cfg, file_sorting="size_largest_smallest")
+            plan = build_plan(RuntimeContext(config=cfg))
+            items = discover_video_work(plan)
+            self.assertEqual([item.filename for item in items], ["b.mp4", "c.mp4", "a.mp4"])
 
     def test_orchestrator_passes_explicit_image_runtime_args(self):
         with tempfile.TemporaryDirectory() as td:

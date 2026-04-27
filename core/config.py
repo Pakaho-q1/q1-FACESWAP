@@ -117,6 +117,28 @@ def _parse_provider(value, field_name):
     )
 
 
+def _parse_file_sorting(value):
+    normalized = str(value).strip().lower()
+    allowed = {
+        "date_modified_newest",
+        "date_modified_oldest",
+        "date_created_newest",
+        "date_created_oldest",
+        "size_smallest_largest",
+        "size_largest_smallest",
+        "name_az",
+        "name_za",
+    }
+    if normalized not in allowed:
+        raise argparse.ArgumentTypeError(
+            "FILE_SORTING must be one of: "
+            "date_modified_newest, date_modified_oldest, date_created_newest, "
+            "date_created_oldest, size_smallest_largest, size_largest_smallest, "
+            "name_az, name_za."
+        )
+    return normalized
+
+
 def _platform_ffmpeg_name() -> str:
     """Return the correct ffmpeg binary name for the current OS."""
     return "ffmpeg.exe" if sys.platform == "win32" else "ffmpeg"
@@ -281,6 +303,7 @@ CODE_DEFAULTS = {
     "WORKER_QUEUE_SIZE": "64",
     "OUT_QUEUE_SIZE": "128",
     "TUNER_MODE": "auto",
+    "FILE_SORTING": "date_modified_newest",
     "GPU_TARGET_UTIL": "95",
     "HIGH_WATERMARK": "12",
     "LOW_WATERMARK": "4",
@@ -400,6 +423,11 @@ parser.add_argument(
     "--tuner-mode", type=str, choices=["auto", "max_util", "stable"],
     default=_get_env_choice(ENV_VALUES, "TUNER_MODE", "auto", {"auto", "max_util", "stable"}),
     help="Tuner strategy mode.",
+)
+parser.add_argument(
+    "--file-sorting", type=_parse_file_sorting,
+    default=_parse_file_sorting(_first_defined(ENV_VALUES, ["FILE_SORTING"], "date_modified_newest")),
+    help="File sorting strategy used to order processing inputs.",
 )
 parser.add_argument(
     "--gpu-target-util", type=int,
@@ -529,7 +557,7 @@ def _apply_parsed_args(args, validate_paths):
     global FACE_NAME, FORMAT_IS_IMAGE, INPUT_PATH
     global ENABLE_RESTORE, ENABLE_PARSER, RESTORE_CHOICE, PARSER_CHOICE
     global WORKERS_PER_STAGE, WORKER_QUEUE_SIZE, OUT_QUEUE_SIZE
-    global TUNER_MODE, GPU_TARGET_UTIL, HIGH_WATERMARK, LOW_WATERMARK, SWITCH_COOLDOWN_S
+    global TUNER_MODE, FILE_SORTING, GPU_TARGET_UTIL, HIGH_WATERMARK, LOW_WATERMARK, SWITCH_COOLDOWN_S
     global PRESERVE_SWAP_EYES, PARSER_MASK_BLUR
     global DRY_RUN, LOG_LEVEL, OUTPUT_SUFFIX, SKIP_EXISTING, MAX_FRAMES, MAX_RETRIES
     global PRINT_EFFECTIVE_CONFIG, ENABLE_SWAPPER, SWAPPER_BLEND, RESTORE_WEIGHT, RESTORE_BLEND
@@ -556,6 +584,7 @@ def _apply_parsed_args(args, validate_paths):
     OUT_QUEUE_SIZE = args.out_queue_size
 
     TUNER_MODE = args.tuner_mode
+    FILE_SORTING = args.file_sorting
     GPU_TARGET_UTIL = args.gpu_target_util
     HIGH_WATERMARK = args.high_watermark
     LOW_WATERMARK = args.low_watermark
@@ -806,6 +835,7 @@ def get_effective_config():
         "WORKER_QUEUE_SIZE": WORKER_QUEUE_SIZE,
         "OUT_QUEUE_SIZE": OUT_QUEUE_SIZE,
         "TUNER_MODE": TUNER_MODE,
+        "FILE_SORTING": FILE_SORTING,
         "GPU_TARGET_UTIL": GPU_TARGET_UTIL,
         "HIGH_WATERMARK": HIGH_WATERMARK,
         "LOW_WATERMARK": LOW_WATERMARK,
