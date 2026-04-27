@@ -41,11 +41,13 @@ try:
         ensure_workspace,
         list_face_names,
         list_latest_outputs,
+        list_output_gallery_page,
         load_project_settings,
         collect_runtime_health,
         preview_job_queue,
         read_model_manifest_status,
         save_project_settings,
+        shutdown_output_index_service,
         validate_project_path,
     )
     from gui.runtime.media import (
@@ -105,11 +107,13 @@ except ImportError:
         ensure_workspace,
         list_face_names,
         list_latest_outputs,
+        list_output_gallery_page,
         load_project_settings,
         collect_runtime_health,
         preview_job_queue,
         read_model_manifest_status,
         save_project_settings,
+        shutdown_output_index_service,
         validate_project_path,
     )
     from runtime.media import register_media_root, register_media_route, to_media_url  # type: ignore
@@ -1056,6 +1060,8 @@ def build_main_ui(root: Any, project_root: str) -> None:
                         .classes("text-xs")
                     )
 
+                gallery_tabs = ui.row().classes("w-full items-center gap-1")
+
                 # Gallery items container
                 gallery_items = ui.row().classes("w-full gap-2")
 
@@ -1124,6 +1130,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                 "register_media_root": register_media_root,
                 "to_media_url": to_media_url,
                 "list_latest_outputs": list_latest_outputs,
+                "list_output_gallery_page": list_output_gallery_page,
                 "collect_runtime_health": collect_runtime_health,
                 "apply_health_report": apply_health_report,
                 "save_project_settings": save_project_settings,
@@ -1133,6 +1140,7 @@ def build_main_ui(root: Any, project_root: str) -> None:
                 "check_tensorrt_status": check_tensorrt_status,
                 "run_setup_checks": run_setup_checks,
                 "normalize_controller_event": normalize_controller_event,
+                "shutdown_output_index_service": shutdown_output_index_service,
             }
         )
         wire_main_ui_logic(logic_ctx)

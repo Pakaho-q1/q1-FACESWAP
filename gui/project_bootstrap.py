@@ -13,6 +13,10 @@ from core.project_layout import (
     is_site_packages_path,
     normalize_project_root,
 )
+try:
+    from gui.services.output_index_service import OutputIndexService
+except ImportError:
+    from services.output_index_service import OutputIndexService  # type: ignore
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -20,6 +24,25 @@ SOURCE_ASSETS_DIR = PROJECT_ROOT / "assets"
 USER_HOME = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))).expanduser()
 FALLBACK_SETTINGS_ROOT = USER_HOME / "q1-faceswap"
 FALLBACK_SETTINGS_PATH = FALLBACK_SETTINGS_ROOT / "settings.json"
+_OUTPUT_INDEX_SERVICE: OutputIndexService | None = None
+
+
+def _get_output_index_service(project_root: str) -> OutputIndexService:
+    global _OUTPUT_INDEX_SERVICE
+    if _OUTPUT_INDEX_SERVICE is None:
+        layout = build_layout(project_root)
+        runtime_dir = Path(layout.assets_dir) / "runtime"
+        runtime_dir.mkdir(parents=True, exist_ok=True)
+        db_path = runtime_dir / "output_index.sqlite3"
+        _OUTPUT_INDEX_SERVICE = OutputIndexService(str(db_path))
+    return _OUTPUT_INDEX_SERVICE
+
+
+def shutdown_output_index_service() -> None:
+    global _OUTPUT_INDEX_SERVICE
+    if _OUTPUT_INDEX_SERVICE is not None:
+        _OUTPUT_INDEX_SERVICE.shutdown()
+        _OUTPUT_INDEX_SERVICE = None
 
 
 def detect_requires_project_path() -> bool:
@@ -252,47 +275,44 @@ def preview_job_queue(input_path: str) -> dict[str, int]:
     video_ext = {".mp4", ".mkv", ".avi", ".mov"}
     image_count = 0
     video_count = 0
-    for item in p.iterdir():
-        if not item.is_file():
-            continue
-        ext = item.suffix.lower()
-        if ext in image_ext:
-            image_count += 1
-        elif ext in video_ext:
-            video_count += 1
+    try:
+        with os.scandir(str(p)) as entries:
+            for entry in entries:
+                if not entry.is_file():
+                    continue
+                _, ext = os.path.splitext(entry.name)
+                ext_l = ext.lower()
+                if ext_l in image_ext:
+                    image_count += 1
+                elif ext_l in video_ext:
+                    video_count += 1
+    except OSError:
+        return {"image": 0, "video": 0, "all": 0}
     return {"image": image_count, "video": video_count, "all": image_count + video_count}
 
 
 def list_latest_outputs(output_path: str, limit: int = 12) -> list[dict[str, str]]:
-    p = Path(output_path).expanduser()
-    if not p.is_dir():
-        return []
-    image_ext = {".png", ".jpg", ".jpeg"}
-    video_ext = {".mp4", ".mkv", ".avi", ".mov"}
-    rows: list[dict[str, str]] = []
-    for item in p.iterdir():
-        if not item.is_file():
-            continue
-        ext = item.suffix.lower()
-        kind = ""
-        if ext in image_ext:
-            kind = "image"
-        elif ext in video_ext:
-            kind = "video"
-        if not kind:
-            continue
-        try:
-            mtime = item.stat().st_mtime
-        except OSError:
-            continue
-        rows.append(
-            {
-                "name": item.name,
-                "path": str(item),
-                "uri": item.resolve().as_uri(),
-                "kind": kind,
-                "mtime": str(mtime),
-            }
-        )
-    rows.sort(key=lambda x: float(x["mtime"]), reverse=True)
-    return rows[: max(1, int(limit))]
+    page = list_output_gallery_page(
+        project_root=str(PROJECT_ROOT),
+        output_path=output_path,
+        page=1,
+        page_size=max(1, int(limit)),
+        force_scan=False,
+    )
+    return list(page.get("rows", []))
+
+
+def list_output_gallery_page(
+    project_root: str,
+    output_path: str,
+    page: int = 1,
+    page_size: int = 50,
+    force_scan: bool = False,
+) -> dict[str, Any]:
+    service = _get_output_index_service(project_root)
+    return service.get_page(
+        output_path=output_path,
+        page=page,
+        page_size=page_size,
+        force_refresh=force_scan,
+    )

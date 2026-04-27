@@ -103,6 +103,7 @@ def clear_handler(ctx: dict[str, Any]) -> None:
 def poll_handler(ctx: dict[str, Any]) -> None:
     # handle controller events and update UI using provided ctx
     normalize_controller_event = ctx["normalize_controller_event"]
+    latest_tuner_payload: dict[str, Any] | None = None
     for raw_kind, raw_payload in ctx["controller"].poll_events():
         event = normalize_controller_event(raw_kind, raw_payload)
         if event.kind == "progress":
@@ -116,9 +117,8 @@ def poll_handler(ctx: dict[str, Any]) -> None:
             ctx["progress_bar"].set_value(pct)
             progress_pct_value = int(round(pct * 100.0))
             ctx["progress_last_percent_ref"].set(progress_pct_value)
-            ctx["progress_label"].set_text(
-                f"Progress: {label} {done}/{total} ({progress_pct_value}%)"
-            )
+            _ = label
+            ctx["progress_label"].set_text("Progress:running")
             ctx["progress_count"].set_text(f"{done}/{total}")
             ctx["progress_pct"].set_text(f"{progress_pct_value}%")
             ctx["update_throughput"](done)
@@ -155,18 +155,13 @@ def poll_handler(ctx: dict[str, Any]) -> None:
             elif name == "item_started":
                 if ctx["processing_started_at_ref"].get() <= 0:
                     ctx["processing_started_at_ref"].set(time.perf_counter())
-                kind_name = str(data.get("kind", "work"))
-                ctx["progress_label"].set_text(
-                    f"Progress: running | started={kind_name} | done i/v={ctx['store'].completed_counts['image']}/{ctx['store'].completed_counts['video']} | failed i/v={ctx['store'].failed_counts['image']}/{ctx['store'].failed_counts['video']} | {ctx['progress_last_percent_ref'].get()}%"
-                )
+                ctx["progress_label"].set_text("Progress:running")
                 ctx["update_job_queue_status"]()
             elif name == "item_completed":
                 kind_name = str(data.get("kind", "work")).lower()
                 if kind_name in ctx["store"].completed_counts:
                     ctx["store"].completed_counts[kind_name] += 1
-                ctx["progress_label"].set_text(
-                    f"Progress: running | done i/v={ctx['store'].completed_counts['image']}/{ctx['store'].completed_counts['video']} | failed i/v={ctx['store'].failed_counts['image']}/{ctx['store'].failed_counts['video']} | {ctx['progress_last_percent_ref'].get()}%"
-                )
+                ctx["progress_label"].set_text("Progress:running")
                 ctx["update_job_queue_status"]()
                 ctx["update_throughput"]()
             elif name == "item_failed":
@@ -176,9 +171,7 @@ def poll_handler(ctx: dict[str, Any]) -> None:
                 if kind_name in ctx["store"].failed_counts:
                     ctx["store"].failed_counts[kind_name] += 1
                 ctx["add_error_row"]("event", f"{kind_name} failed: {item_id}", reason)
-                ctx["progress_label"].set_text(
-                    f"Progress: running | done i/v={ctx['store'].completed_counts['image']}/{ctx['store'].completed_counts['video']} | failed i/v={ctx['store'].failed_counts['image']}/{ctx['store'].failed_counts['video']} | {ctx['progress_last_percent_ref'].get()}%"
-                )
+                ctx["progress_label"].set_text("Progress:running")
                 ctx["update_job_queue_status"]()
                 ctx["update_throughput"]()
             elif name == "pipeline_complete":
@@ -186,70 +179,15 @@ def poll_handler(ctx: dict[str, Any]) -> None:
                 ctx["last_pipeline_metrics_ref"].set(dict(metrics))
                 ctx["apply_pipeline_metrics"](metrics)
                 ctx["throughput_eta"].set_text("[00.00]")
-                ctx["progress_label"].set_text(
-                    f"Progress: completed | done i/v={ctx['store'].completed_counts['image']}/{ctx['store'].completed_counts['video']} | failed i/v={ctx['store'].failed_counts['image']}/{ctx['store'].failed_counts['video']}"
-                )
+                ctx["progress_label"].set_text("Progress:completed")
                 ctx["append_log"](f"Pipeline metrics: {metrics}")
-                ctx["set_gallery"]()
+                ctx["set_gallery"](force_scan=True)
             elif name == "tuner_status":
-                ctx["tuner_tick_ref"].set(ctx["tuner_tick_ref"].get() + 1)
-                ctx["x_hist"].append(str(ctx["tuner_tick_ref"].get()))
-                gpu_util = int(data.get("gpu_util", 0))
-                ctx["preview_engine"].set_gpu_util(gpu_util)
-                ctx["gpu_hist"].append(gpu_util)
-                sizes = dict(data.get("sizes", {}))
-                permits = dict(data.get("permits", {}))
-                ctx["q_detect_hist"].append(int(sizes.get("detect", 0)))
-                ctx["q_swap_hist"].append(int(sizes.get("swap", 0)))
-                ctx["q_restore_hist"].append(int(sizes.get("restore", 0)))
-                ctx["q_parse_hist"].append(int(sizes.get("parse", 0)))
-                ctx["p_detect_hist"].append(int(permits.get("detect", 0)))
-                ctx["p_swap_hist"].append(int(permits.get("swap", 0)))
-                ctx["p_restore_hist"].append(int(permits.get("restore", 0)))
-                ctx["p_parse_hist"].append(int(permits.get("parse", 0)))
-                ctx["tuner_gpu"].set_text(f"{gpu_util}%")
-                ctx["tuner_mode_live"].set_text(str(data.get("mode_name", "normal")))
-                ctx["tuner_hot"].set_text(str(data.get("hot_stage", "-")))
-                ctx["q_detect_label"].set_text(str(sizes.get("detect", 0)))
-                ctx["q_swap_label"].set_text(str(sizes.get("swap", 0)))
-                ctx["q_restore_label"].set_text(str(sizes.get("restore", 0)))
-                ctx["q_parse_label"].set_text(str(sizes.get("parse", 0)))
-                ctx["p_detect_label"].set_text(str(permits.get("detect", 0)))
-                ctx["p_swap_label"].set_text(str(permits.get("swap", 0)))
-                ctx["p_restore_label"].set_text(str(permits.get("restore", 0)))
-                ctx["p_parse_label"].set_text(str(permits.get("parse", 0)))
-                # update charts
-                ctx["gpu_chart"].options["xAxis"]["data"] = list(ctx["x_hist"])
-                ctx["gpu_chart"].options["series"][0]["data"] = list(ctx["gpu_hist"])
-                ctx["gpu_chart"].update()
-                ctx["queue_chart"].options["xAxis"]["data"] = list(ctx["x_hist"])
-                ctx["queue_chart"].options["series"][0]["data"] = list(
-                    ctx["q_detect_hist"]
-                )
-                ctx["queue_chart"].options["series"][1]["data"] = list(
-                    ctx["q_swap_hist"]
-                )
-                ctx["queue_chart"].options["series"][2]["data"] = list(
-                    ctx["q_restore_hist"]
-                )
-                ctx["queue_chart"].options["series"][3]["data"] = list(
-                    ctx["q_parse_hist"]
-                )
-                ctx["queue_chart"].update()
-                ctx["permit_chart"].options["xAxis"]["data"] = list(ctx["x_hist"])
-                ctx["permit_chart"].options["series"][0]["data"] = list(
-                    ctx["p_detect_hist"]
-                )
-                ctx["permit_chart"].options["series"][1]["data"] = list(
-                    ctx["p_swap_hist"]
-                )
-                ctx["permit_chart"].options["series"][2]["data"] = list(
-                    ctx["p_restore_hist"]
-                )
-                ctx["permit_chart"].options["series"][3]["data"] = list(
-                    ctx["p_parse_hist"]
-                )
-                ctx["permit_chart"].update()
+                latest_tuner_payload = dict(data)
+            elif name == "controller_metrics":
+                set_metrics = ctx.get("set_controller_metrics")
+                if callable(set_metrics):
+                    set_metrics(dict(data))
         elif event.kind == "log":
             ctx["append_log"](str(event.payload.get("message", "")))
         elif event.kind == "done":
@@ -264,7 +202,7 @@ def poll_handler(ctx: dict[str, Any]) -> None:
             ctx["controller"].finish()
             ctx["run_btn"].enable()
             ctx["stop_btn"].disable()
-            ctx["set_gallery"]()
+            ctx["set_gallery"](force_scan=True)
             ctx["update_job_queue_status"]()
             ctx["validate_form_inline"]()
         elif event.kind == "stopped":
@@ -287,3 +225,46 @@ def poll_handler(ctx: dict[str, Any]) -> None:
             ctx["stop_btn"].disable()
             ctx["update_job_queue_status"]()
             ctx["validate_form_inline"]()
+
+    if latest_tuner_payload is not None:
+        ctx["tuner_tick_ref"].set(ctx["tuner_tick_ref"].get() + 1)
+        ctx["x_hist"].append(str(ctx["tuner_tick_ref"].get()))
+        gpu_util = int(latest_tuner_payload.get("gpu_util", 0))
+        ctx["preview_engine"].set_gpu_util(gpu_util)
+        ctx["gpu_hist"].append(gpu_util)
+        sizes = dict(latest_tuner_payload.get("sizes", {}))
+        permits = dict(latest_tuner_payload.get("permits", {}))
+        ctx["q_detect_hist"].append(int(sizes.get("detect", 0)))
+        ctx["q_swap_hist"].append(int(sizes.get("swap", 0)))
+        ctx["q_restore_hist"].append(int(sizes.get("restore", 0)))
+        ctx["q_parse_hist"].append(int(sizes.get("parse", 0)))
+        ctx["p_detect_hist"].append(int(permits.get("detect", 0)))
+        ctx["p_swap_hist"].append(int(permits.get("swap", 0)))
+        ctx["p_restore_hist"].append(int(permits.get("restore", 0)))
+        ctx["p_parse_hist"].append(int(permits.get("parse", 0)))
+        ctx["tuner_gpu"].set_text(f"{gpu_util}%")
+        ctx["tuner_mode_live"].set_text(str(latest_tuner_payload.get("mode_name", "normal")))
+        ctx["tuner_hot"].set_text(str(latest_tuner_payload.get("hot_stage", "-")))
+        ctx["q_detect_label"].set_text(str(sizes.get("detect", 0)))
+        ctx["q_swap_label"].set_text(str(sizes.get("swap", 0)))
+        ctx["q_restore_label"].set_text(str(sizes.get("restore", 0)))
+        ctx["q_parse_label"].set_text(str(sizes.get("parse", 0)))
+        ctx["p_detect_label"].set_text(str(permits.get("detect", 0)))
+        ctx["p_swap_label"].set_text(str(permits.get("swap", 0)))
+        ctx["p_restore_label"].set_text(str(permits.get("restore", 0)))
+        ctx["p_parse_label"].set_text(str(permits.get("parse", 0)))
+        ctx["gpu_chart"].options["xAxis"]["data"] = list(ctx["x_hist"])
+        ctx["gpu_chart"].options["series"][0]["data"] = list(ctx["gpu_hist"])
+        ctx["gpu_chart"].update()
+        ctx["queue_chart"].options["xAxis"]["data"] = list(ctx["x_hist"])
+        ctx["queue_chart"].options["series"][0]["data"] = list(ctx["q_detect_hist"])
+        ctx["queue_chart"].options["series"][1]["data"] = list(ctx["q_swap_hist"])
+        ctx["queue_chart"].options["series"][2]["data"] = list(ctx["q_restore_hist"])
+        ctx["queue_chart"].options["series"][3]["data"] = list(ctx["q_parse_hist"])
+        ctx["queue_chart"].update()
+        ctx["permit_chart"].options["xAxis"]["data"] = list(ctx["x_hist"])
+        ctx["permit_chart"].options["series"][0]["data"] = list(ctx["p_detect_hist"])
+        ctx["permit_chart"].options["series"][1]["data"] = list(ctx["p_swap_hist"])
+        ctx["permit_chart"].options["series"][2]["data"] = list(ctx["p_restore_hist"])
+        ctx["permit_chart"].options["series"][3]["data"] = list(ctx["p_parse_hist"])
+        ctx["permit_chart"].update()

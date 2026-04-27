@@ -85,3 +85,32 @@ def render_gallery(
                         on_click=lambda _e=None, p=row["path"]: on_open(p),
                         color="secondary",
                     ).props("dense flat")
+
+
+def render_gallery_rows(
+    rows: list[dict[str, str]],
+    gallery_items: Any,
+    on_view: Callable[[dict[str, str]], None],
+    on_open: Callable[[str], None],
+) -> None:
+    clear_items = getattr(gallery_items, "clear", None)
+    if callable(clear_items):
+        clear_items()
+    for row in rows:
+        with gallery_items:
+            with ui.card().classes("w-[230px] border border-slate-200 bg-white"):
+                ui.label(f"[{row['kind']}]").classes("text-xs text-slate-500")
+                ui.label(str(row["name"])).classes(
+                    "text-sm font-medium text-slate-700 break-all"
+                )
+                with ui.row().classes("w-full gap-1 justify-between"):
+                    ui.button(
+                        "View",
+                        on_click=lambda _e=None, r=row: on_view(r),
+                        color="primary",
+                    ).props("dense")
+                    ui.button(
+                        "Open",
+                        on_click=lambda _e=None, p=row["path"]: on_open(p),
+                        color="secondary",
+                    ).props("dense flat")

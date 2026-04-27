@@ -115,10 +115,8 @@ def build_page() -> None:
             build_main_ui(root, normalized_default)
 
 
-build_page()
-
-
 if __name__ in {"__main__", "__mp_main__"}:
+    build_page()
     if sys.platform == "win32":
         import asyncio
 

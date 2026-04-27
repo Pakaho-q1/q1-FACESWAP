@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 from typing import Any
 
 
@@ -21,29 +20,40 @@ def scan_selected_job_status(
     controller_running: bool,
 ) -> dict[str, int]:
     selected_fmt = str(selected_format or "image").lower()
-    in_dir = Path(str(input_path_value or "").strip()).expanduser()
-    out_dir = Path(str(output_path_value or "").strip()).expanduser()
+    in_dir = os.path.expanduser(str(input_path_value or "").strip())
+    out_dir = os.path.expanduser(str(output_path_value or "").strip())
     image_ext = {".png", ".jpg", ".jpeg"}
     video_ext = {".mp4", ".mkv", ".avi", ".mov"}
 
     total = 0
     done = 0
-    if in_dir.is_dir():
-        input_files: list[str] = []
-        for item in in_dir.iterdir():
-            if not item.is_file():
-                continue
-            ext = item.suffix.lower()
-            if selected_fmt == "video" and ext in video_ext:
-                input_files.append(item.name)
-            elif selected_fmt != "video" and ext in image_ext:
-                input_files.append(item.name)
-        total = len(input_files)
-        if out_dir.is_dir() and input_files:
-            output_names = {build_output_name(name, suffix) for name in input_files}
-            for out_item in out_dir.iterdir():
-                if out_item.is_file() and out_item.name in output_names:
-                    done += 1
+    input_files: list[str] = []
+
+    if os.path.isdir(in_dir):
+        try:
+            with os.scandir(in_dir) as entries:
+                for entry in entries:
+                    if not entry.is_file():
+                        continue
+                    _, ext = os.path.splitext(entry.name)
+                    ext_l = ext.lower()
+                    if selected_fmt == "video" and ext_l in video_ext:
+                        input_files.append(entry.name)
+                    elif selected_fmt != "video" and ext_l in image_ext:
+                        input_files.append(entry.name)
+        except OSError:
+            input_files = []
+
+    total = len(input_files)
+    if total > 0 and os.path.isdir(out_dir):
+        expected_names = {build_output_name(name, suffix) for name in input_files}
+        try:
+            with os.scandir(out_dir) as out_entries:
+                for entry in out_entries:
+                    if entry.is_file() and entry.name in expected_names:
+                        done += 1
+        except OSError:
+            done = 0
 
     failed = failed_counts["video"] if selected_fmt == "video" else failed_counts["image"]
     planned = max(0, total - done)

@@ -35,3 +35,5 @@ assets/settings.json
 # Runtime artifacts and temporary face-builder uploads
 assets/runtime/*
 !assets/runtime/.gitkeep
+assets/docs/New Text Document.txt
+TODO_100k_HARDENING.md

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import tempfile
+import threading
 import time
 from typing import Any
 
@@ -13,6 +14,7 @@ try:
         open_gallery_preview as open_gallery_preview_action,
         open_output_in_explorer as open_output_in_explorer_action,
         render_gallery,
+        render_gallery_rows,
     )
     from gui.actions.health_actions import (
         run_setup_wizard_checks_action,
@@ -43,6 +45,7 @@ except ImportError:
         open_gallery_preview as open_gallery_preview_action,
         open_output_in_explorer as open_output_in_explorer_action,
         render_gallery,
+        render_gallery_rows,
     )
     from actions.health_actions import run_setup_wizard_checks_action, set_health_action  # type: ignore
     from actions.preview_actions import flush_preview_render, sync_preview_card, toggle_preview_pause  # type: ignore
@@ -178,6 +181,7 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
 
     log_view = ctx["log_view"]
     gallery_status = ctx["gallery_status"]
+    gallery_tabs = ctx["gallery_tabs"]
     gallery_items = ctx["gallery_items"]
 
     run_btn = ctx["run_btn"]
@@ -261,6 +265,13 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
         "tuner_tick": int(ctx.get("tuner_tick", 0) or 0),
         "notified_face_build_done": set(),
         "face_build_uploaded_files": [],
+        "gallery_page": 1,
+        "gallery_page_size": 50,
+        "gallery_total_pages": 0,
+        "gallery_total_rows": 0,
+        "gallery_signature": "",
+        "runtime_last_ui_refresh_ts": 0.0,
+        "queue_hint_base": "Preview checks input path only.",
     }
 
     def preview_reset_js() -> None:
@@ -292,7 +303,11 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
     def download_all_missing_models() -> None:
         queued = download_service.download_all_missing_models(latest_health_report)
         ui.notify(
-            f"Queued downloads: {queued}" if queued > 0 else "No missing models to download",
+            (
+                f"Queued downloads: {queued}"
+                if queued > 0
+                else "No missing models to download"
+            ),
             color="positive" if queued > 0 else "info",
         )
 
@@ -303,10 +318,14 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
         download_service.clear_finished_downloads()
 
     def render_download_center() -> None:
-        download_service.render_download_center(download_center_list, download_center_summary)
+        download_service.render_download_center(
+            download_center_list, download_center_summary
+        )
 
     def open_tensorrt_dialog() -> bool:
-        return download_service.open_tensorrt_dialog(tensorrt_dialog, trt_missing_label, trt_target_label)
+        return download_service.open_tensorrt_dialog(
+            tensorrt_dialog, trt_missing_label, trt_target_label
+        )
 
     def render_model_status_dialog() -> None:
         download_service.render_model_status_dialog(
@@ -356,7 +375,12 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
         "key": None,
         "value": {"total": 0, "done": 0, "planned": 0, "running": 0, "failed": 0},
         "ts": 0.0,
+        "dirty": True,
+        "scan_inflight": False,
+        "scan_requested": False,
+        "scan_seq": 0,
     }
+    status_cache_lock = threading.Lock()
 
     def _status_cache_key() -> tuple[Any, ...]:
         return (
@@ -369,29 +393,76 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
             int(failed_counts.get("video", 0)),
         )
 
-    def scan_selected_status(force: bool = False) -> dict[str, int]:
+    def _scan_status_worker(
+        scan_seq: int, cache_key: tuple[Any, ...], payload: dict[str, Any]
+    ) -> None:
+        value = scan_selected_job_status(
+            selected_format=str(payload.get("selected_format", "image")),
+            input_path_value=str(payload.get("input_path_value", "")),
+            output_path_value=str(payload.get("output_path_value", "")),
+            suffix=str(payload.get("suffix", "")),
+            failed_counts=dict(payload.get("failed_counts", {})),
+            controller_running=bool(payload.get("controller_running", False)),
+        )
+        with status_cache_lock:
+            latest_seq = int(status_cache.get("scan_seq", 0))
+            if scan_seq < latest_seq:
+                return
+            status_cache["key"] = cache_key
+            status_cache["value"] = dict(value)
+            status_cache["ts"] = time.monotonic()
+            status_cache["dirty"] = bool(status_cache.get("scan_requested", False))
+            status_cache["scan_requested"] = False
+            status_cache["scan_inflight"] = False
+
+    def _trigger_status_scan(force: bool = False) -> None:
         key = _status_cache_key()
         now = time.monotonic()
         refresh_s = 2.5 if bool(controller.state.running) else 5.0
-        if (
-            not force
-            and status_cache["key"] == key
-            and (now - float(status_cache["ts"])) < refresh_s
-        ):
-            return dict(status_cache["value"])
+        payload = {
+            "selected_format": str(format_select.value or "image"),
+            "input_path_value": str(input_path.value or ""),
+            "output_path_value": str(output_path.value or ""),
+            "suffix": str(defaults.get("output_suffix", "") or ""),
+            "failed_counts": dict(failed_counts),
+            "controller_running": bool(controller.state.running),
+        }
 
-        value = scan_selected_job_status(
-            selected_format=str(format_select.value or "image"),
-            input_path_value=str(input_path.value or ""),
-            output_path_value=str(output_path.value or ""),
-            suffix=str(defaults.get("output_suffix", "") or ""),
-            failed_counts=failed_counts,
-            controller_running=bool(controller.state.running),
-        )
-        status_cache["key"] = key
-        status_cache["value"] = dict(value)
-        status_cache["ts"] = now
-        return value
+        start_worker = False
+        scan_seq = 0
+        with status_cache_lock:
+            if force:
+                status_cache["dirty"] = True
+            key_match = status_cache.get("key") == key
+            age = now - float(status_cache.get("ts", 0.0))
+            fresh_enough = (
+                key_match
+                and not bool(status_cache.get("dirty", True))
+                and age < refresh_s
+            )
+            if fresh_enough:
+                return
+            if bool(status_cache.get("scan_inflight", False)):
+                status_cache["scan_requested"] = True
+                return
+            status_cache["scan_inflight"] = True
+            status_cache["scan_requested"] = False
+            status_cache["scan_seq"] = int(status_cache.get("scan_seq", 0)) + 1
+            scan_seq = int(status_cache["scan_seq"])
+            start_worker = True
+
+        if start_worker:
+            worker = threading.Thread(
+                target=_scan_status_worker,
+                args=(scan_seq, key, payload),
+                daemon=True,
+            )
+            worker.start()
+
+    def scan_selected_status(force: bool = False) -> dict[str, int]:
+        _trigger_status_scan(force=force)
+        with status_cache_lock:
+            return dict(status_cache["value"])
 
     def update_job_queue_status(force: bool = False) -> None:
         status = scan_selected_status(force=force)
@@ -407,12 +478,27 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
         queue_image.set_text(str(planned_counts["image"]))
         queue_video.set_text(str(planned_counts["video"]))
         selected_fmt = str(format_select.value or "image").lower()
-        selected_count = planned_counts["video"] if selected_fmt == "video" else planned_counts["image"]
+        selected_count = (
+            planned_counts["video"]
+            if selected_fmt == "video"
+            else planned_counts["image"]
+        )
         queue_selected.set_text(str(selected_count))
         update_job_queue_status(force=True)
         status = scan_selected_status(force=False)
+        local_box["queue_hint_base"] = (
+            f"Input scan: images={planned_counts['image']} videos={planned_counts['video']} "
+            f"(format={selected_fmt}) | done={status['done']} pending={status['planned']}"
+        )
+        queue_hint.set_text(local_box["queue_hint_base"])
+
+    def set_controller_metrics(metrics: dict[str, Any]) -> None:
+        queue_depth = int(metrics.get("queue_depth", 0) or 0)
+        dropped_logs = int(metrics.get("dropped_logs", 0) or 0)
+        dropped_events = int(metrics.get("dropped_events", 0) or 0)
+        prefix = str(local_box.get("queue_hint_base", ""))
         queue_hint.set_text(
-            f"Input scan: images={planned_counts['image']} videos={planned_counts['video']} (format={selected_fmt}) | done={status['done']} pending={status['planned']}"
+            f"{prefix} | ctl_q={queue_depth} drop(log/event)={dropped_logs}/{dropped_events}"
         )
 
     def refresh_face_models() -> None:
@@ -481,9 +567,7 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
             return str(face_build_input_path.value or "").strip()
         upload_root = Path(project_root) / "assets" / "runtime" / "face_build_uploads"
         upload_root.mkdir(parents=True, exist_ok=True)
-        temp_dir = Path(
-            tempfile.mkdtemp(prefix="face_build_", dir=str(upload_root))
-        )
+        temp_dir = Path(tempfile.mkdtemp(prefix="face_build_", dir=str(upload_root)))
         for idx, item in enumerate(uploaded_files, start=1):
             file_name = _sanitize_uploaded_filename(str(item.get("name", "")), idx)
             payload = bytes(item.get("data", b""))
@@ -507,11 +591,15 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
             overwrite=True,
         )
         if not started:
-            ui.notify("Face model build is already running for this name", color="warning")
+            ui.notify(
+                "Face model build is already running for this name", color="warning"
+            )
             return
         face_build_status.set_text(f"[{name}] queued")
         if local_box["face_build_uploaded_files"]:
-            ui.notify("Face model build queued (using uploaded files)", color="positive")
+            ui.notify(
+                "Face model build queued (using uploaded files)", color="positive"
+            )
         else:
             ui.notify("Face model build queued", color="positive")
 
@@ -545,7 +633,9 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
             if finished_status == "done" and finished_name not in notified:
                 completed_faces.append(finished_name)
                 notified.add(finished_name)
-                ui.notify(f"Face model '{finished_name}' built successfully", color="positive")
+                ui.notify(
+                    f"Face model '{finished_name}' built successfully", color="positive"
+                )
             elif finished_status == "error" and finished_name not in notified:
                 notified.add(finished_name)
                 ui.notify(
@@ -566,7 +656,15 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
             store.last_progress_done = done_now
             store.last_progress_ts = now
 
-        elapsed = max(0.0, now - (store.processing_started_at if store.processing_started_at > 0 else store.run_started_at))
+        elapsed = max(
+            0.0,
+            now
+            - (
+                store.processing_started_at
+                if store.processing_started_at > 0
+                else store.run_started_at
+            ),
+        )
         fallback_remaining = scan_selected_status(force=False)["planned"]
         t = compute_throughput(
             progress_units_done=store.progress_units_done,
@@ -577,7 +675,9 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
         )
         throughput_items_min.set_text(f"{float(t['items_per_min']):.1f}")
         throughput_fps.set_text(f"[{float(t['write_fps']):.1f}/fps]")
-        throughput_eta.set_text(f"[{format_eta(float(t['eta_seconds'])).replace(':', '.')}]")
+        throughput_eta.set_text(
+            f"[{format_eta(float(t['eta_seconds'])).replace(':', '.')}]"
+        )
 
     def apply_pipeline_metrics(metrics: dict[str, Any]) -> None:
         _, _, progress_units_done, progress_units_total = merge_pipeline_metrics(
@@ -605,16 +705,81 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
             controller_running=bool(controller.state.running),
         )
 
-    def set_gallery() -> None:
-        ctx["register_media_root"](str(output_path.value or ""))
-        render_gallery(
-            output_path_value=str(output_path.value or ""),
+    def _render_gallery_tab_buttons(total_pages: int) -> None:
+        clear_tabs = getattr(gallery_tabs, "clear", None)
+        if callable(clear_tabs):
+            clear_tabs()
+        if total_pages <= 1:
+            return
+
+        current_page = int(local_box["gallery_page"])
+        start = max(1, current_page - 4)
+        end = min(total_pages, start + 8)
+        if end - start < 8:
+            start = max(1, end - 8)
+
+        with gallery_tabs:
+            for page_no in range(start, end + 1):
+                is_active = page_no == current_page
+                btn_color = "primary" if is_active else "secondary"
+                btn_props = "dense" if is_active else "dense flat"
+                ui.button(
+                    f"Tab {page_no}",
+                    on_click=lambda _e=None, p=page_no: _open_gallery_page(p),
+                    color=btn_color,
+                ).props(btn_props).classes("text-xs")
+
+    def _render_gallery_page(page_payload: dict[str, Any]) -> None:
+        rows = list(page_payload.get("rows", []))
+        total = int(page_payload.get("total", 0) or 0)
+        page = int(page_payload.get("page", 1) or 1)
+        total_pages = int(page_payload.get("total_pages", 0) or 0)
+        stats = dict(page_payload.get("stats", {}))
+
+        local_box["gallery_page"] = page
+        local_box["gallery_total_pages"] = total_pages
+        local_box["gallery_total_rows"] = total
+
+        first_name = str(rows[0]["name"]) if rows else ""
+        last_name = str(rows[-1]["name"]) if rows else ""
+        signature = f"{total}:{page}:{total_pages}:{first_name}:{last_name}:{int(bool(stats.get('scan_inflight', False)))}"
+        if signature == str(local_box.get("gallery_signature", "")):
+            return
+        local_box["gallery_signature"] = signature
+
+        render_gallery_rows(
+            rows=rows,
             gallery_items=gallery_items,
-            gallery_status=gallery_status,
-            list_latest_outputs=ctx["list_latest_outputs"],
             on_view=open_gallery_preview,
             on_open=open_output_in_explorer,
         )
+        _render_gallery_tab_buttons(total_pages)
+        if total <= 0:
+            gallery_status.set_text("No output files found")
+            return
+        scan_state = "scanning" if bool(stats.get("scan_inflight", False)) else "ready"
+        duration_ms = float(stats.get("last_scan_duration_ms", 0.0) or 0.0)
+        queue_depth = int(stats.get("queue_depth", 0) or 0)
+        gallery_status.set_text(
+            f"{total} outputs | tab {page}/{total_pages} | showing {len(rows)} items | "
+            f"scan={scan_state} {duration_ms:.0f}ms q={queue_depth}"
+        )
+
+    def _open_gallery_page(page_no: int) -> None:
+        local_box["gallery_page"] = max(1, int(page_no))
+        set_gallery(force_scan=False)
+
+    def set_gallery(force_scan: bool = False) -> None:
+        output_path_value = str(output_path.value or "")
+        ctx["register_media_root"](output_path_value)
+        page_payload = ctx["list_output_gallery_page"](
+            project_root=project_root,
+            output_path=output_path_value,
+            page=int(local_box["gallery_page"]),
+            page_size=int(local_box["gallery_page_size"]),
+            force_scan=bool(force_scan),
+        )
+        _render_gallery_page(page_payload)
 
     def add_error_row(source: str, message: str, detail: str = "") -> None:
         row = {"source": source, "message": message.strip(), "detail": detail.strip()}
@@ -628,11 +793,15 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
             with error_list:
                 with ui.row().classes("w-full items-center gap-2"):
                     ui.badge(entry["source"]).props("outline").classes("text-rose-700")
-                    ui.label(entry["message"][:180]).classes("text-xs text-rose-900 grow")
+                    ui.label(entry["message"][:180]).classes(
+                        "text-xs text-rose-900 grow"
+                    )
                     if entry["detail"]:
                         ui.button(
                             "Details",
-                            on_click=lambda _e=None, d=entry["detail"]: ui.notify(d, multi_line=True, timeout=8000),
+                            on_click=lambda _e=None, d=entry["detail"]: ui.notify(
+                                d, multi_line=True, timeout=8000
+                            ),
                             color="negative",
                         ).props("flat dense")
             if idx >= 39:
@@ -655,7 +824,10 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
         ctx["ensure_workspace"](project_root)
         set_health()
         if free_gb >= 0 and free_gb < 10.0:
-            ui.notify(f"Project structure initialized, but low disk space: {free_gb:.1f} GB free", color="warning")
+            ui.notify(
+                f"Project structure initialized, but low disk space: {free_gb:.1f} GB free",
+                color="warning",
+            )
         else:
             ui.notify("Project structure initialized successfully", color="positive")
 
@@ -663,7 +835,13 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
         stamped = store.append_log(message)
         log_view.push(stamped)
         lower = message.lower()
-        if "traceback" in lower or "error" in lower or "failed" in lower or "exception" in lower or "critical" in lower:
+        if (
+            "traceback" in lower
+            or "error" in lower
+            or "failed" in lower
+            or "exception" in lower
+            or "critical" in lower
+        ):
             add_error_row("log", message)
 
     def collect_values() -> dict[str, Any]:
@@ -807,7 +985,12 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
             render_download_center()
 
     def tick_runtime_cards() -> None:
+        now = time.monotonic()
+        if (now - float(local_box.get("runtime_last_ui_refresh_ts", 0.0))) < 0.5:
+            return
+        local_box["runtime_last_ui_refresh_ts"] = now
         update_job_queue_status()
+        set_gallery(force_scan=False)
         if controller.state.running:
             update_throughput()
 
@@ -828,7 +1011,9 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
                 "progress_units_label_ref": _StoreRef(store, "progress_units_label"),
                 "progress_last_percent_ref": _StoreRef(store, "progress_last_percent"),
                 "preview_paused_ref": _StoreRef(store, "preview_paused"),
-                "latest_outqueue_write_fps_ref": _StoreRef(store, "latest_outqueue_write_fps"),
+                "latest_outqueue_write_fps_ref": _StoreRef(
+                    store, "latest_outqueue_write_fps"
+                ),
                 "processing_started_at_ref": _StoreRef(store, "processing_started_at"),
                 "store": store,
                 "update_job_queue_status": update_job_queue_status,
@@ -867,6 +1052,7 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
                 "run_btn": run_btn,
                 "stop_btn": stop_btn,
                 "validate_form_inline": validate_form_inline,
+                "set_controller_metrics": set_controller_metrics,
             }
         )
 
@@ -898,7 +1084,7 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
     wizard_run_checks_btn.on_click(run_setup_wizard_checks)
     refresh_health_btn.on_click(set_health)
     refresh_queue_btn.on_click(set_queue_preview)
-    refresh_gallery_btn.on_click(set_gallery)
+    refresh_gallery_btn.on_click(lambda: set_gallery(force_scan=True))
     clear_error_btn.on_click(clear_errors)
     build_face_btn.on_click(start_face_model_build)
     face_build_open_btn.on_click(lambda: open_dialog(face_build_dialog))
@@ -907,14 +1093,28 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
     clear_face_build_btn.on_click(clear_face_build_state)
     face_build_upload.on_upload(_on_face_upload)
 
-    input_path.on_value_change(lambda _e: (set_queue_preview(), validate_form_inline(), update_job_queue_status()))
-    output_path.on_value_change(lambda _e: (set_health(), set_gallery(), validate_form_inline()))
+    input_path.on_value_change(
+        lambda _e: (
+            set_queue_preview(),
+            validate_form_inline(),
+            update_job_queue_status(),
+        )
+    )
+    output_path.on_value_change(
+        lambda _e: (set_health(), set_gallery(force_scan=True), validate_form_inline())
+    )
     face_select.on_value_change(lambda _e: validate_form_inline())
-    format_select.on_value_change(lambda _e: (set_queue_preview(), update_job_queue_status(), update_throughput()))
+    format_select.on_value_change(
+        lambda _e: (set_queue_preview(), update_job_queue_status(), update_throughput())
+    )
     provider_all.on_value_change(
         lambda _e: (
             set_health(),
-            (open_tensorrt_dialog() if str(provider_all.value or "").lower() == "trt" else None),
+            (
+                open_tensorrt_dialog()
+                if str(provider_all.value or "").lower() == "trt"
+                else None
+            ),
         )
     )
 
@@ -929,7 +1129,9 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
     use_swaper.on_value_change(lambda _e: sync_stage_visibility())
     use_restore.on_value_change(lambda _e: sync_stage_visibility())
     use_parser.on_value_change(lambda _e: sync_stage_visibility())
-    preview_fps_limit.on_value_change(lambda _e: apply_preview_fps_limit(preview_fps_limit, preview_engine))
+    preview_fps_limit.on_value_change(
+        lambda _e: apply_preview_fps_limit(preview_fps_limit, preview_engine)
+    )
 
     for control in [
         face_select,
@@ -966,7 +1168,7 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
     autosave_coordinator.schedule(0.1)
     set_health()
     set_queue_preview()
-    set_gallery()
+    set_gallery(force_scan=True)
     validate_form_inline()
     update_job_queue_status()
     run_setup_wizard_checks()
@@ -996,3 +1198,6 @@ def wire_main_ui_logic(ctx: dict[str, Any]) -> None:
 
     app.on_shutdown(lambda: preview_engine.shutdown())
     app.on_shutdown(lambda: autosave_coordinator.shutdown())
+    shutdown_output_index_service = ctx.get("shutdown_output_index_service")
+    if callable(shutdown_output_index_service):
+        app.on_shutdown(lambda: shutdown_output_index_service())

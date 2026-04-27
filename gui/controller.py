@@ -8,6 +8,7 @@ import subprocess
 import sys
 import threading
 import json
+import time
 from typing import Any
 from pathlib import Path
 
@@ -21,11 +22,14 @@ class PipelineController:
     def __init__(self, state: AppStore | None = None) -> None:
         # allow injection of AppStore (SSOT)
         self.state = state or AppStore()
-        self.event_q: "queue.Queue[tuple[str, Any]]" = queue.Queue()
+        self.event_q: "queue.Queue[tuple[str, Any]]" = queue.Queue(maxsize=5000)
         self._worker_thread: threading.Thread | None = None
         self._stdout_thread: threading.Thread | None = None
         self._stderr_thread: threading.Thread | None = None
         self._proc: subprocess.Popen[str] | None = None
+        self._dropped_log_events = 0
+        self._dropped_nonlog_events = 0
+        self._last_metrics_emit = 0.0
         self._project_root = Path(__file__).resolve().parents[1]
         self._tuner_re = re.compile(
             r"GPU:\s*(?P<gpu>\d+)%\s*\|\s*MODE:\s*(?P<mode>[a-zA-Z_]+)\s*\|\s*HOT:\s*(?P<hot>[a-zA-Z_]+)"
@@ -39,6 +43,25 @@ class PipelineController:
         self._progress_re = re.compile(r"(?P<done>\d+)\s*/\s*(?P<total>\d+)")
         self._ansi_re = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
         self._gui_prefix = "__Q1_GUI__"
+
+    def _push_event(self, kind: str, payload: Any) -> None:
+        try:
+            self.event_q.put_nowait((kind, payload))
+            return
+        except queue.Full:
+            pass
+        if kind == "log":
+            self._dropped_log_events += 1
+            return
+        try:
+            _ = self.event_q.get_nowait()
+            self._dropped_nonlog_events += 1
+        except queue.Empty:
+            pass
+        try:
+            self.event_q.put_nowait((kind, payload))
+        except queue.Full:
+            self._dropped_nonlog_events += 1
 
     def _build_cli_argv(self, values: dict[str, Any]) -> list[str]:
         def b(flag: str, value: bool) -> list[str]:
@@ -122,20 +145,18 @@ class PipelineController:
                 "restore": int(p_match.group("r")),
                 "parse": int(p_match.group("p")),
             }
-        self.event_q.put(
-            (
-                "event",
-                {
-                    "name": "tuner_status",
-                    "payload": {
-                        "gpu_util": int(tuner.group("gpu")),
-                        "mode_name": tuner.group("mode"),
-                        "hot_stage": tuner.group("hot"),
-                        "sizes": sizes,
-                        "permits": permits,
-                    },
+        self._push_event(
+            "event",
+            {
+                "name": "tuner_status",
+                "payload": {
+                    "gpu_util": int(tuner.group("gpu")),
+                    "mode_name": tuner.group("mode"),
+                    "hot_stage": tuner.group("hot"),
+                    "sizes": sizes,
+                    "permits": permits,
                 },
-            )
+            },
         )
 
     def _emit_progress_from_line(self, line: str) -> None:
@@ -151,8 +172,9 @@ class PipelineController:
             label = "video"
         elif "Processing Images" in line:
             label = "image"
-        self.event_q.put(
-            ("progress", {"label": label, "completed": done, "total": total})
+        self._push_event(
+            "progress",
+            {"label": label, "completed": done, "total": total},
         )
 
     def _stream_reader(self, stream, source: str) -> None:
@@ -172,30 +194,26 @@ class PipelineController:
                 return True
             event_type = str(payload.get("type", "")).strip().lower()
             if event_type == "event":
-                self.event_q.put(
-                    (
-                        "event",
-                        {
-                            "name": str(payload.get("name", "event")),
-                            "payload": dict(payload.get("payload", {})),
-                        },
-                    )
+                self._push_event(
+                    "event",
+                    {
+                        "name": str(payload.get("name", "event")),
+                        "payload": dict(payload.get("payload", {})),
+                    },
                 )
                 return True
             if event_type == "progress":
-                self.event_q.put(
-                    (
-                        "progress",
-                        {
-                            "label": str(payload.get("label", "work")),
-                            "completed": int(payload.get("completed", 0)),
-                            "total": int(payload.get("total", 0)),
-                        },
-                    )
+                self._push_event(
+                    "progress",
+                    {
+                        "label": str(payload.get("label", "work")),
+                        "completed": int(payload.get("completed", 0)),
+                        "total": int(payload.get("total", 0)),
+                    },
                 )
                 return True
             if event_type == "log":
-                self.event_q.put(("log", str(payload.get("message", ""))))
+                self._push_event("log", str(payload.get("message", "")))
                 return True
             return True
 
@@ -209,7 +227,7 @@ class PipelineController:
                 return
             if handle_gui_line(line):
                 return
-            self.event_q.put(("log", line))
+            self._push_event("log", line)
             self._emit_tuner_status_from_line(line)
             self._emit_progress_from_line(line)
 
@@ -224,7 +242,7 @@ class PipelineController:
                     continue
                 buffer.append(ch)
         except Exception as exc:  # noqa: BLE001
-            self.event_q.put(("log", f"{source}_stream_error: {exc}"))
+            self._push_event("log", f"{source}_stream_error: {exc}")
         finally:
             try:
                 stream.close()
@@ -323,7 +341,7 @@ class PipelineController:
                 creationflags=creationflags,
                 **popen_kwargs,
             )
-            self.event_q.put(("log", f"Spawned CLI process pid={self._proc.pid}"))
+            self._push_event("log", f"Spawned CLI process pid={self._proc.pid}")
 
             self._stdout_thread = threading.Thread(
                 target=self._stream_reader,
@@ -347,20 +365,16 @@ class PipelineController:
                 self._stderr_thread.join(timeout=2.0)
 
             if stop_event.is_set() or self.state.stop_requested:
-                self.event_q.put(
-                    ("stopped", {"reason": "user_stop", "return_code": return_code})
-                )
+                self._push_event("stopped", {"reason": "user_stop", "return_code": return_code})
             elif return_code == 0:
-                self.event_q.put(("done", {"return_code": return_code}))
+                self._push_event("done", {"return_code": return_code})
             else:
-                self.event_q.put(("error", f"CLI exited with code {return_code}"))
+                self._push_event("error", f"CLI exited with code {return_code}")
         except BaseException as exc:  # noqa: BLE001
             if stop_event.is_set():
-                self.event_q.put(
-                    ("stopped", {"reason": "user_stop", "details": str(exc)})
-                )
+                self._push_event("stopped", {"reason": "user_stop", "details": str(exc)})
             else:
-                self.event_q.put(("error", str(exc)))
+                self._push_event("error", str(exc))
         finally:
             self._proc = None
             self._stdout_thread = None
@@ -397,9 +411,7 @@ class PipelineController:
         self.state.stop_event.set()
         proc = self._proc
         if proc is not None and proc.poll() is None:
-            self.event_q.put(
-                ("log", f"Stopping process pid={proc.pid} (graceful first)...")
-            )
+            self._push_event("log", f"Stopping process pid={proc.pid} (graceful first)...")
             self._stop_process_tree(proc)
         return True
 
@@ -414,6 +426,7 @@ class PipelineController:
 
     def poll_events(self) -> list[tuple[str, Any]]:
         events: list[tuple[str, Any]] = []
+        queue_size = self.event_q.qsize()
         while True:
             try:
                 events.append(self.event_q.get_nowait())
@@ -432,4 +445,20 @@ class PipelineController:
                 )
             else:
                 events.append(("error", "Worker exited unexpectedly"))
+        now = time.monotonic()
+        if (now - self._last_metrics_emit) >= 1.0:
+            self._last_metrics_emit = now
+            events.append(
+                (
+                    "event",
+                    {
+                        "name": "controller_metrics",
+                        "payload": {
+                            "queue_depth": queue_size,
+                            "dropped_logs": self._dropped_log_events,
+                            "dropped_events": self._dropped_nonlog_events,
+                        },
+                    },
+                )
+            )
         return events
