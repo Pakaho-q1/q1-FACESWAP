@@ -334,9 +334,13 @@ def process_videos(
                     if state.abort_event.is_set():
                         break
                     try:
+                        # พยายามใส่ของเข้าคิว โดยรอไม่เกิน 0.2 วินาที
                         queues.detect.put((frame_id, frame), timeout=0.2)
                         break
                     except queue.Full:
+                        # 🌟 เพิ่มบรรทัดนี้: ถ้าคิวเต็มและผู้ใช้กดหยุด ให้หลุดออกจากลูปยัดคิวทันที
+                        if state.abort_event.is_set():
+                            break
                         continue
                 if state.abort_event.is_set():
                     break

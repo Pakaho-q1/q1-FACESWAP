@@ -1414,7 +1414,7 @@ def register_ui_assets() -> None:
             padding: var(--q1-space-2);
           }
           .runtime-preview-body {
-            padding: var(--q1-space-1);
+            padding: 0;
           }
           .runtime-workspace > .runtime-panel { grid-column: 1 / -1; order: 20; }
           .runtime-workspace > .runtime-summary {
