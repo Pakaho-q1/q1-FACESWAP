@@ -8,7 +8,7 @@ import unittest
 class DryRunConfigValidationTests(unittest.TestCase):
     def test_dry_run_exits_successfully(self):
         repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        script_path = os.path.join(repo_root, "face_swap_unified.py")
+        script_path = os.path.join(repo_root, "faceswap.py")
 
         with tempfile.TemporaryDirectory() as temp_input, tempfile.TemporaryDirectory() as temp_output:
             cmd = [
@@ -44,7 +44,7 @@ class DryRunConfigValidationTests(unittest.TestCase):
 
     def test_print_effective_config(self):
         repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        script_path = os.path.join(repo_root, "face_swap_unified.py")
+        script_path = os.path.join(repo_root, "faceswap.py")
 
         with tempfile.TemporaryDirectory() as temp_input, tempfile.TemporaryDirectory() as temp_output:
             cmd = [

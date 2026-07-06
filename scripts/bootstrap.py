@@ -84,13 +84,13 @@ def main() -> None:
         # Repair onnxruntime-gpu if it was broken by the uninstall
         if run_command([sys.executable, "-m", "pip", "show", "onnxruntime-gpu"]):
             print("[INFO] Repairing onnxruntime-gpu installation...")
-            run_command([sys.executable, "-m", "pip", "install", "--force-reinstall", "onnxruntime-gpu"])
+            run_command([sys.executable, "-m", "pip", "install", "--force-reinstall", "onnxruntime-gpu", "numpy<2.0.0"])
 
     if run_command([sys.executable, "-m", "pip", "show", "onnxruntime-gpu"]):
         print_ok("onnxruntime-gpu is installed correctly.")
     else:
         print_warn("onnxruntime-gpu not detected. Installing onnxruntime-gpu...")
-        if run_command([sys.executable, "-m", "pip", "install", "onnxruntime-gpu"]):
+        if run_command([sys.executable, "-m", "pip", "install", "onnxruntime-gpu", "numpy<2.0.0"]):
             print_ok("onnxruntime-gpu installed successfully.")
         else:
             print_err("Failed to install onnxruntime-gpu.")
