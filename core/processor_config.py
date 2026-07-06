@@ -22,7 +22,6 @@ class ProcessorConfig:
 
     # Parser
     enable_parser: bool
-    parser_type: str          # "bisenet" | "segformer"
     parser_mask_blur: int
     preserve_swap_eyes: bool
 
@@ -41,7 +40,6 @@ def build_processor_config_from_run_config(run_config) -> ProcessorConfig:
         restore_weight=run_config.restore_weight,
         restore_blend=run_config.restore_blend,
         enable_parser=run_config.enable_parser,
-        parser_type=run_config.parser_type,
         parser_mask_blur=run_config.parser_mask_blur,
         preserve_swap_eyes=run_config.preserve_swap_eyes,
     )

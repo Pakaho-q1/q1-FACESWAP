@@ -23,6 +23,8 @@ def _build_run_config(*, format_is_image: bool, input_path: str, output_dir: str
         format_is_image=format_is_image,
         input_path=input_path,
         output_dir=output_dir,
+        face_source_is_image=False,
+        input_single_file="",
         # Pipeline switches
         enable_swapper=False,
         enable_restore=False,
@@ -36,8 +38,6 @@ def _build_run_config(*, format_is_image: bool, input_path: str, output_dir: str
         restore_weight=0.7,
         restore_blend=0.7,
         # Parser
-        parser_choice="1",
-        parser_type="bisenet",
         parser_mask_blur=21,
         preserve_swap_eyes=True,
         # Runtime

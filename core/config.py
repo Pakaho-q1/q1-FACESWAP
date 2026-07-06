@@ -172,7 +172,7 @@ def _default_model_manifest() -> dict:
         "models": [
             {"filename": "ffmpeg.exe", "url": f"{base}/ffmpeg.exe", "sha256": ""},
             {"filename": "inswapper_128.onnx", "url": f"{base}/inswapper_128.onnx", "sha256": ""},
-            {"filename": "faceparser_resnet34.onnx", "url": f"{base}/faceparser_resnet34.onnx", "sha256": ""},
+
             {"filename": "codeformer.onnx", "url": f"{base}/codeformer.onnx", "sha256": ""},
             {"filename": "Segformer_CelebAMask-HQ.onnx", "url": f"{base}/Segformer_CelebAMask-HQ.onnx", "sha256": ""},
             {"filename": "GPEN-BFR-512.onnx", "url": f"{base}/GPEN-BFR-512.onnx", "sha256": ""},
@@ -292,13 +292,13 @@ def _sync_models_from_manifest(
 
 CODE_DEFAULTS = {
     "PROJECT_PATH": "",
-    "FACE_MODEL_NAME": "",
+    "INPUT_FACE": "",
     "FORMAT": "image",
-    "INPUT_PATH": "",
+    "INPUT_TARGET": "",
     "USE_RESTORE": "true",
     "RESTORE_CHOICE": "1",
     "USE_PARSER": "true",
-    "PARSER_CHOICE": "1",
+
     "WORKERS_PER_STAGE": "8",
     "WORKER_QUEUE_SIZE": "64",
     "OUT_QUEUE_SIZE": "128",
@@ -318,7 +318,6 @@ CODE_DEFAULTS = {
     "MAX_RETRIES": "2",
     "PRINT_EFFECTIVE_CONFIG": "false",
     "OUTPUT_PATH": "",
-    "FACE_MODEL_PATH": "",
     "PROVIDER_ALL": "trt",
     "PROVIDER_SWAPER": "auto",
     "PROVIDER_RESTORE": "auto",
@@ -337,225 +336,335 @@ ENV_VALUES = dict(CODE_DEFAULTS)
 ENV_VALUES.update(_load_env_file(ENV_OFFICIAL_PATH))
 ENV_VALUES.update(_load_env_file(ENV_USER_PATH))
 
-# Allow legacy env keys.
-if _first_defined(ENV_VALUES, ["FACE_MODEL_NAME"], "") == "":
-    legacy_face = _first_defined(ENV_VALUES, ["FACE_NAME"], "")
+# Allow legacy env keys to map to new names.
+if _first_defined(ENV_VALUES, ["INPUT_FACE"], "") == "":
+    legacy_face = _first_defined(ENV_VALUES, ["FACE_MODEL_NAME", "FACE_NAME"], "")
     if legacy_face:
-        ENV_VALUES["FACE_MODEL_NAME"] = legacy_face
-if _first_defined(ENV_VALUES, ["INPUT_PATH"], "") == "":
-    legacy_input = _first_defined(ENV_VALUES, ["INPUT_DIR"], "")
-    if legacy_input:
-        ENV_VALUES["INPUT_PATH"] = legacy_input
+        ENV_VALUES["INPUT_FACE"] = legacy_face
+if _first_defined(ENV_VALUES, ["INPUT_TARGET"], "") == "":
+    legacy_target = _first_defined(ENV_VALUES, ["INPUT_PATH", "INPUT_DIR"], "")
+    if legacy_target:
+        ENV_VALUES["INPUT_TARGET"] = legacy_target
 
 
-parser = argparse.ArgumentParser(description="Unified Face Swap System (Image/Video)")
-parser.add_argument(
+parent_parser = argparse.ArgumentParser(add_help=False)
+parent_parser.add_argument(
     "--project-path", "--project_path", dest="PROJECT_PATH", type=str,
     default=_get_env_str(ENV_VALUES, "PROJECT_PATH", ""),
     help="Base directory where q1-FACESWAP workspace will be created/used.",
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--model-home", "--model_home", dest="MODEL_HOME", type=str,
     default=_get_env_str(ENV_VALUES, "MODEL_HOME", ""),
-    help="Directory containing model binaries and assets (overrides default model path).",
+    help=argparse.SUPPRESS,
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--assets-home", "--assets_home", dest="ASSETS_HOME", type=str,
     default=_get_env_str(ENV_VALUES, "ASSETS_HOME", ""),
-    help="Directory for writable runtime assets (trt_cache/faces/temp_audio/TensorRT).",
+    help=argparse.SUPPRESS,
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--preload-models", "--preload_models", dest="PRELOAD_MODELS", type=_parse_bool,
     default=_get_env_bool(ENV_VALUES, "PRELOAD_MODELS", False),
     help="Download missing required models from model_manifest.json before validation.",
 )
-parser.add_argument(
-    "--face-name", "--face-model-name", dest="FACE_MODEL_NAME", type=str,
-    default=_get_env_str(ENV_VALUES, "FACE_MODEL_NAME", ""),
-    help="Face model name",
+parent_parser.add_argument(
+    "--input-face", dest="INPUT_FACE", type=str,
+    default=_get_env_str(ENV_VALUES, "INPUT_FACE", ""),
+    help=(
+        "Source face to swap in. Accepts:\n"
+        "  face_name          bare name → looks for <faces_dir>/<name>.safetensors\n"
+        "  path/to/face.safetensors   explicit model file\n"
+        "  path/to/alice.jpg  image file (auto-detected; face extracted at startup)\n"
+        "  path/to/alice.png  same as above (supports .jpg .jpeg .png .webp .bmp)"
+    ),
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--format", type=_parse_format,
     default=_parse_format(_first_defined(ENV_VALUES, ["FORMAT"], "image")),
     help="image or video (legacy: 1=image, 2=video).",
 )
-parser.add_argument(
-    "--input-dir", "--input-path", dest="INPUT_PATH", type=str,
-    default=_get_env_str(ENV_VALUES, "INPUT_PATH", ""),
-    help="Input directory path",
+parent_parser.add_argument(
+    "--input-target", "--input-dir", "--input-path", dest="INPUT_TARGET", type=str,
+    default=_get_env_str(ENV_VALUES, "INPUT_TARGET", ""),
+    help=(
+        "Input target. Accepts:\n"
+        "  directory path     process all images/videos in the folder\n"
+        "  file path (.jpg .png .mp4 ...)  process just this one file"
+    ),
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--use-restore", type=_parse_bool,
     default=_get_env_bool(ENV_VALUES, "USE_RESTORE", True),
     help="Enable restore stage (true/false).",
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--restore-choice", type=str, choices=["1", "2", "3", "4"],
     default=_get_env_choice(ENV_VALUES, "RESTORE_CHOICE", "1", {"1", "2", "3", "4"}),
     help="1:GFPGAN 2:GPEN512 3:GPEN1024 4:CodeFormer",
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--use-parser", type=_parse_bool,
     default=_get_env_bool(ENV_VALUES, "USE_PARSER", True),
     help="Enable parser stage (true/false).",
 )
-parser.add_argument(
-    "--parser-choice", type=str, choices=["1", "2"],
-    default=_get_env_choice(ENV_VALUES, "PARSER_CHOICE", "1", {"1", "2"}),
-    help="1:BiSeNet 2:SegFormer",
-)
-parser.add_argument(
+
+parent_parser.add_argument(
     "--workers-per-stage", type=int,
     default=_get_env_int(ENV_VALUES, "WORKERS_PER_STAGE", 8),
     help="Workers spawned per pipeline stage.",
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--worker-queue-size", type=int,
     default=_get_env_int(ENV_VALUES, "WORKER_QUEUE_SIZE", 64),
     help="Queue size for worker stages.",
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--out-queue-size", type=int,
     default=_get_env_int(ENV_VALUES, "OUT_QUEUE_SIZE", 128),
     help="Queue size for output stage.",
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--tuner-mode", type=str, choices=["auto", "max_util", "stable"],
     default=_get_env_choice(ENV_VALUES, "TUNER_MODE", "auto", {"auto", "max_util", "stable"}),
     help="Tuner strategy mode.",
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--file-sorting", type=_parse_file_sorting,
     default=_parse_file_sorting(_first_defined(ENV_VALUES, ["FILE_SORTING"], "date_modified_newest")),
     help="File sorting strategy used to order processing inputs.",
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--gpu-target-util", type=int,
     default=_get_env_int(ENV_VALUES, "GPU_TARGET_UTIL", 95),
     help="Target GPU utilization percentage for tuner.",
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--high-watermark", type=int,
     default=_get_env_int(ENV_VALUES, "HIGH_WATERMARK", 12),
     help="Queue high watermark threshold for entering drain mode.",
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--low-watermark", type=int,
     default=_get_env_int(ENV_VALUES, "LOW_WATERMARK", 4),
     help="Queue low watermark threshold for leaving drain mode.",
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--switch-cooldown-s", type=float,
     default=_get_env_float(ENV_VALUES, "SWITCH_COOLDOWN_S", 0.35),
     help="Minimum seconds between tuner mode/stage switches.",
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--preserve-swap-eyes", type=_parse_bool,
     default=_get_env_bool(ENV_VALUES, "PRESERVE_SWAP_EYES", True),
     help="Force swapped-eye preservation in parser stage.",
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--parser-mask-blur", type=int,
     default=_get_env_int(ENV_VALUES, "PARSER_MASK_BLUR", 21),
     help="Parser mask blur kernel size (odd number).",
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--dry-run", type=_parse_bool,
     default=_get_env_bool(ENV_VALUES, "DRY_RUN", False),
     help="Validate configuration and exit without inference.",
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--log-level", type=str, choices=["warning", "info", "debug"],
     default=_get_env_choice(ENV_VALUES, "LOG_LEVEL", "warning", {"warning", "info", "debug"}),
     help="Application log level.",
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--output-suffix", type=str,
     default=_get_env_str(ENV_VALUES, "OUTPUT_SUFFIX", ""),
     help="Suffix appended to output filenames.",
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--skip-existing", type=_parse_bool,
     default=_get_env_bool(ENV_VALUES, "SKIP_EXISTING", True),
     help="Skip files that already exist in output.",
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--max-frames", type=int,
     default=_get_env_int(ENV_VALUES, "MAX_FRAMES", 0),
     help="Process only first N frames/images. 0 means no limit.",
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--max-retries", type=int,
     default=_get_env_int(ENV_VALUES, "MAX_RETRIES", 2),
     help="Maximum attempts per item including initial attempt.",
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--print-effective-config", type=_parse_bool,
     default=_get_env_bool(ENV_VALUES, "PRINT_EFFECTIVE_CONFIG", False),
     help="Print merged effective configuration at startup.",
 )
-parser.add_argument(
-    "--output-path", type=str,
+parent_parser.add_argument(
+    "-o", "--output", "--output-path", dest="output_path", type=str,
     default=_get_env_str(ENV_VALUES, "OUTPUT_PATH", ""),
     help="Override output directory path.",
 )
-parser.add_argument(
-    "--face-model-path", type=str,
-    default=_get_env_str(ENV_VALUES, "FACE_MODEL_PATH", ""),
-    help="Override source face model (.safetensors) path.",
-)
-parser.add_argument(
+
+parent_parser.add_argument(
     "--provider-all", type=str,
     default=_get_env_str(ENV_VALUES, "PROVIDER_ALL", "trt"),
     help="Default provider for all stages (cpu/cuda/trt).",
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--provider-swaper", type=str,
     default=_get_env_str(ENV_VALUES, "PROVIDER_SWAPER", "auto"),
     help="Provider override for swap stage.",
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--provider-restore", type=str,
     default=_get_env_str(ENV_VALUES, "PROVIDER_RESTORE", "auto"),
     help="Provider override for restore stage.",
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--provider-parser", type=str,
     default=_get_env_str(ENV_VALUES, "PROVIDER_PARSER", "auto"),
     help="Provider override for parser stage.",
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--provider-detect", type=str,
     default=_get_env_str(ENV_VALUES, "PROVIDER_DETECT", "auto"),
     help="Provider override for detect stage.",
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--use-swaper", type=_parse_bool,
     default=_get_env_bool(ENV_VALUES, "USE_SWAPER", True),
     help="Enable swap stage (true/false).",
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--swaper-weigh", type=float,
     default=_get_env_float(ENV_VALUES, "SWAPER_WEIGH", 0.70),
     help="Swap blend ratio in range [0,1].",
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--restore-weigh", type=float,
     default=_get_env_float(ENV_VALUES, "RESTORE_WEIGH", 0.70),
     help="Restore model fidelity/weight hint in range [0,1].",
 )
-parser.add_argument(
+parent_parser.add_argument(
     "--restore-blend", type=float,
     default=_get_env_float(ENV_VALUES, "RESTORE_BLEND", 0.70),
     help="Restore blending ratio in range [0,1].",
 )
 
+parser = argparse.ArgumentParser(description="Unified Face Swap System (Image/Video)")
+subparsers = parser.add_subparsers(dest="command", help="Subcommand to run")
+
+# 1. run subparser (inherits all parent_parser options)
+run_parser = subparsers.add_parser("run", parents=[parent_parser], help="Run face swap pipeline")
+
+# 2. gui subparser (inherits parent_parser for settings, adds gui specific flags)
+gui_parser = subparsers.add_parser("gui", parents=[parent_parser], help="Launch NiceGUI web interface")
+gui_parser.add_argument(
+    "--host", type=str, default="127.0.0.1",
+    help="Bind address for NiceGUI server.",
+)
+gui_parser.add_argument(
+    "--port", type=int, default=8080,
+    help="Port number to listen on.",
+)
+gui_parser.add_argument(
+    "--no-reload", action="store_true",
+    help="Disable automatic development reload.",
+)
+
+# 3. sync subparser
+sync_parser = subparsers.add_parser("sync", parents=[parent_parser], help="Sync/download required models")
+sync_parser.add_argument(
+    "--force", action="store_true",
+    help="Re-download/overwrite existing models even if checksums match.",
+)
+
+# 4. version subparser
+version_parser = subparsers.add_parser("version", parents=[parent_parser], help="Display version info")
+version_parser.add_argument(
+    "--json", action="store_true",
+    help="Format output as JSON.",
+)
+
 _CLI_INITIALIZED = False
+
+# ---------------------------------------------------------------------------
+# Image extensions: files that can be source faces or target images.
+# ---------------------------------------------------------------------------
+_IMAGE_FACE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+_VIDEO_TARGET_EXTS = {".mp4", ".mkv", ".avi", ".mov"}
+_IMAGE_TARGET_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+
+
+def _resolve_input_face(raw: str, faces_dir: str):
+    """Return (face_name, source_face_path, face_source_is_image).
+
+    Accepts any of:
+    - bare name            → looks for <faces_dir>/<name>.safetensors
+    - path ending .safetensors  → explicit model file
+    - path ending image ext     → source image; face detected at startup
+    """
+    raw = raw.strip()
+    if not raw:
+        return "", "", False
+
+    _, ext = os.path.splitext(raw)
+    ext = ext.lower()
+
+    if ext in _IMAGE_FACE_EXTS:
+        # Image source face: detect embedding at startup
+        abs_path = os.path.abspath(raw)
+        face_name = os.path.splitext(os.path.basename(raw))[0]
+        return face_name, abs_path, True
+
+    if ext == ".safetensors":
+        # Explicit safetensors path
+        abs_path = os.path.abspath(raw)
+        face_name = os.path.splitext(os.path.basename(raw))[0]
+        return face_name, abs_path, False
+
+    # Bare name (no recognised extension) → look in faces_dir
+    face_name = raw
+    abs_path = os.path.join(faces_dir, f"{face_name}.safetensors")
+    return face_name, abs_path, False
+
+
+def _resolve_input_target(raw: str):
+    """Return (input_dir, input_single_file, format_is_image_override).
+
+    format_is_image_override is None when the format cannot be auto-detected
+    from the path (directory case → caller keeps --format value).
+    """
+    raw = raw.strip()
+    if not raw:
+        return "", "", None
+
+    abs_raw = os.path.abspath(raw)
+
+    # Existing directory → directory mode
+    if os.path.isdir(abs_raw):
+        return abs_raw, "", None
+
+    # Has a file extension → single-file mode
+    _, ext = os.path.splitext(abs_raw)
+    ext = ext.lower()
+    if ext:
+        parent = os.path.dirname(abs_raw)
+        filename = os.path.basename(abs_raw)
+        if ext in _VIDEO_TARGET_EXTS:
+            return parent, filename, False
+        if ext in _IMAGE_TARGET_EXTS:
+            return parent, filename, True
+        # Unknown extension: still single-file, format auto-detection unavailable
+        return parent, filename, None
+
+    # No extension and not an existing dir → treat as directory path
+    return abs_raw, "", None
 
 
 def _apply_parsed_args(args, validate_paths):
     global FACE_NAME, FORMAT_IS_IMAGE, INPUT_PATH
-    global ENABLE_RESTORE, ENABLE_PARSER, RESTORE_CHOICE, PARSER_CHOICE
+    global ENABLE_RESTORE, ENABLE_PARSER, RESTORE_CHOICE
     global WORKERS_PER_STAGE, WORKER_QUEUE_SIZE, OUT_QUEUE_SIZE
     global TUNER_MODE, FILE_SORTING, GPU_TARGET_UTIL, HIGH_WATERMARK, LOW_WATERMARK, SWITCH_COOLDOWN_S
     global PRESERVE_SWAP_EYES, PARSER_MASK_BLUR
@@ -569,15 +678,19 @@ def _apply_parsed_args(args, validate_paths):
     global SOURCE_FACE_PATH, SWAPPER_MODEL, PARSER_TYPE, PARSER_MODEL
     global RESTORE_MODEL_NAME, RESTORE_SIZE, RESTORE_MODEL_PATH
     global OUTPUT_DIR, FFMPEG_CMD, TENSORRT_DIR
+    global FACE_SOURCE_IS_IMAGE, INPUT_SINGLE_FILE
 
-    FACE_NAME = args.FACE_MODEL_NAME.strip()
+    # Raw input-face and input-target values (resolved after project layout is known)
+    _raw_input_face = getattr(args, "INPUT_FACE", "").strip()
+    _raw_input_target = getattr(args, "INPUT_TARGET", "").strip()
+
+    # Format default; may be overridden by single-file extension detection below
     FORMAT_IS_IMAGE = args.format == "image"
-    INPUT_PATH = args.INPUT_PATH.strip()
 
     ENABLE_RESTORE = bool(args.use_restore)
     ENABLE_PARSER = bool(args.use_parser)
     RESTORE_CHOICE = args.restore_choice
-    PARSER_CHOICE = args.parser_choice
+
 
     WORKERS_PER_STAGE = args.workers_per_stage
     WORKER_QUEUE_SIZE = args.worker_queue_size
@@ -667,17 +780,19 @@ def _apply_parsed_args(args, validate_paths):
     TRT_CACHE_RESTORE_DIR = os.path.join(TRT_CACHE_DIR, "trt_cache_restore")
     TRT_CACHE_PARSER_DIR = os.path.join(TRT_CACHE_DIR, "trt_cache_parser")
     INSIGHTFACE_ROOT = os.path.join(MODELS_DIR, "insightface_models")
-    default_source_face_path = os.path.join(FACES_DIR, f"{FACE_NAME}.safetensors")
-    SOURCE_FACE_PATH = args.face_model_path if args.face_model_path else default_source_face_path
+
+    # Resolve input-face (needs FACES_DIR which is now set)
+    FACE_NAME, SOURCE_FACE_PATH, FACE_SOURCE_IS_IMAGE = _resolve_input_face(_raw_input_face, FACES_DIR)
+
+    # Resolve input-target
+    INPUT_PATH, INPUT_SINGLE_FILE, _fmt_override = _resolve_input_target(_raw_input_target)
+    if _fmt_override is not None:
+        FORMAT_IS_IMAGE = _fmt_override
 
     SWAPPER_MODEL = os.path.join(MODELS_DIR, "inswapper_128.onnx")
 
-    if PARSER_CHOICE == "2":
-        PARSER_TYPE = "segformer"
-        PARSER_MODEL = os.path.join(MODELS_DIR, "Segformer_CelebAMask-HQ.onnx")
-    else:
-        PARSER_TYPE = "bisenet"
-        PARSER_MODEL = os.path.join(MODELS_DIR, "faceparser_resnet34.onnx")
+    PARSER_TYPE = "segformer"
+    PARSER_MODEL = os.path.join(MODELS_DIR, "Segformer_CelebAMask-HQ.onnx")
 
     if RESTORE_CHOICE == "2":
         RESTORE_MODEL_NAME = "GPEN-BFR-512.onnx"
@@ -749,36 +864,49 @@ def _apply_parsed_args(args, validate_paths):
             parser.error(f"{name} must be in range [0.0, 1.0].")
 
     if validate_paths:
-        required_models = {_platform_ffmpeg_name()}
-        if ENABLE_SWAPPER:
-            required_models.add("inswapper_128.onnx")
-        if ENABLE_RESTORE:
-            required_models.add(RESTORE_MODEL_NAME)
-        if ENABLE_PARSER:
-            required_models.add(os.path.basename(PARSER_MODEL))
-        _sync_models_from_manifest(
-            models_dir=MODELS_DIR,
-            manifest=manifest,
-            preload_models=PRELOAD_MODELS,
-            required_filenames=required_models,
-        )
+        cmd = getattr(args, "command", "run")
+        if cmd == "run":
+            required_models = {_platform_ffmpeg_name()}
+            if ENABLE_SWAPPER:
+                required_models.add("inswapper_128.onnx")
+            if ENABLE_RESTORE:
+                required_models.add(RESTORE_MODEL_NAME)
+            if ENABLE_PARSER:
+                required_models.add(os.path.basename(PARSER_MODEL))
+            _sync_models_from_manifest(
+                models_dir=MODELS_DIR,
+                manifest=manifest,
+                preload_models=PRELOAD_MODELS,
+                required_filenames=required_models,
+            )
 
-        if not FACE_NAME:
-            parser.error("FACE_MODEL_NAME is required.")
-        if not INPUT_PATH:
-            parser.error("INPUT_PATH is required.")
-        if not os.path.isdir(INPUT_PATH):
-            parser.error(f"INPUT_PATH does not exist or is not a directory: {INPUT_PATH}")
-        if ENABLE_SWAPPER and not os.path.isfile(SOURCE_FACE_PATH):
-            parser.error(f"Source face model not found: {SOURCE_FACE_PATH}")
-        if ENABLE_SWAPPER and not os.path.isfile(SWAPPER_MODEL):
-            parser.error(f"Swapper model not found: {SWAPPER_MODEL}")
-        if ENABLE_RESTORE and not os.path.isfile(RESTORE_MODEL_PATH):
-            parser.error(f"Restore model not found: {RESTORE_MODEL_PATH}")
-        if ENABLE_PARSER and not os.path.isfile(PARSER_MODEL):
-            parser.error(f"Parser model not found: {PARSER_MODEL}")
-        if not os.path.isfile(FFMPEG_CMD):
-            parser.error(f"ffmpeg executable not found: {FFMPEG_CMD}")
+            if not FACE_NAME:
+                parser.error("--input-face is required.")
+            if not INPUT_PATH:
+                parser.error("--input-target is required.")
+            if INPUT_SINGLE_FILE:
+                # Single-file mode: verify the file exists
+                single_file_full = os.path.join(INPUT_PATH, INPUT_SINGLE_FILE)
+                if not os.path.isfile(single_file_full):
+                    parser.error(f"Input file does not exist: {single_file_full}")
+            else:
+                # Directory mode
+                if not os.path.isdir(INPUT_PATH):
+                    parser.error(f"Input directory does not exist: {INPUT_PATH}")
+            if ENABLE_SWAPPER:
+                if not os.path.isfile(SOURCE_FACE_PATH):
+                    if FACE_SOURCE_IS_IMAGE:
+                        parser.error(f"Source face image not found: {SOURCE_FACE_PATH}")
+                    else:
+                        parser.error(f"Source face model not found: {SOURCE_FACE_PATH}")
+            if ENABLE_SWAPPER and not os.path.isfile(SWAPPER_MODEL):
+                parser.error(f"Swapper model not found: {SWAPPER_MODEL}")
+            if ENABLE_RESTORE and not os.path.isfile(RESTORE_MODEL_PATH):
+                parser.error(f"Restore model not found: {RESTORE_MODEL_PATH}")
+            if ENABLE_PARSER and not os.path.isfile(PARSER_MODEL):
+                parser.error(f"Parser model not found: {PARSER_MODEL}")
+            if not os.path.isfile(FFMPEG_CMD):
+                parser.error(f"ffmpeg executable not found: {FFMPEG_CMD}")
 
     TENSORRT_DIR = os.path.join(TENSORRT_HOME, "bin")
     if not os.path.exists(TENSORRT_DIR):
@@ -795,24 +923,57 @@ def _apply_parsed_args(args, validate_paths):
     os.environ["PATH"] = TENSORRT_DIR + os.pathsep + os.environ.get("PATH", "")
 
 
+def _preprocess_argv(argv):
+    if argv is None:
+        argv = sys.argv[1:]
+    else:
+        argv = list(argv)
+    
+    subcommands = {"run", "gui", "sync", "version"}
+    
+    # Check if a subcommand is already present
+    has_subcommand = any(arg in subcommands for arg in argv)
+    if not has_subcommand and ("-h" in argv or "--help" in argv):
+        return argv
+        
+    first_positional = None
+    for arg in argv:
+        if not arg.startswith("-"):
+            first_positional = arg
+            break
+            
+    if first_positional not in subcommands:
+        argv.insert(0, "run")
+    return argv
+
+
+_CLI_INITIALIZED = False
+_PARSED_ARGS = None
+
+
 def initialize_from_cli(argv=None):
-    global _CLI_INITIALIZED
-    parsed = parser.parse_args(argv)
+    global _CLI_INITIALIZED, _PARSED_ARGS
+    preprocessed_argv = _preprocess_argv(argv)
+    parsed = parser.parse_args(preprocessed_argv)
     _apply_parsed_args(parsed, validate_paths=True)
     _CLI_INITIALIZED = True
+    _PARSED_ARGS = parsed
     return parsed
 
 
 def ensure_cli_initialized(argv=None):
+    global _CLI_INITIALIZED, _PARSED_ARGS
     if not _CLI_INITIALIZED:
-        initialize_from_cli(argv=argv)
+        return initialize_from_cli(argv=argv)
+    return _PARSED_ARGS
 
 
 def is_cli_initialized():
     return bool(_CLI_INITIALIZED)
 
 
-_apply_parsed_args(parser.parse_args([]), validate_paths=False)
+_PARSED_ARGS = parser.parse_args(["run"])
+_apply_parsed_args(_PARSED_ARGS, validate_paths=False)
 
 
 def get_effective_config():
@@ -830,7 +991,7 @@ def get_effective_config():
         "USE_RESTORE": ENABLE_RESTORE,
         "USE_PARSER": ENABLE_PARSER,
         "RESTORE_CHOICE": RESTORE_CHOICE,
-        "PARSER_CHOICE": PARSER_CHOICE,
+
         "WORKERS_PER_STAGE": WORKERS_PER_STAGE,
         "WORKER_QUEUE_SIZE": WORKER_QUEUE_SIZE,
         "OUT_QUEUE_SIZE": OUT_QUEUE_SIZE,
@@ -862,4 +1023,6 @@ def get_effective_config():
         "PARSER_MASK_BLUR": PARSER_MASK_BLUR,
         "DRY_RUN": DRY_RUN,
         "LOG_LEVEL": LOG_LEVEL,
+        "FACE_SOURCE_IS_IMAGE": FACE_SOURCE_IS_IMAGE,
+        "INPUT_SINGLE_FILE": INPUT_SINGLE_FILE,
     }

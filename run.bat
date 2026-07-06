@@ -3,7 +3,7 @@ setlocal EnableExtensions
 chcp 65001 >nul
 set "ROOT=%~dp0"
 set "GUI=%ROOT%gui"
-call env\Scripts\activate
+call conda activate faceswap
 
 cd %GUI%
 python main.py

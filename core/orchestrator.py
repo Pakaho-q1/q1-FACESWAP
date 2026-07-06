@@ -29,6 +29,7 @@ class JobPlan:
     enable_restore: bool
     enable_parser: bool
     workers_per_stage: int
+    input_single_file: str
 
 
 @dataclass(frozen=True)
@@ -137,6 +138,7 @@ def build_plan(ctx: RuntimeContext) -> JobPlan:
         enable_restore=run_cfg.enable_restore,
         enable_parser=run_cfg.enable_parser,
         workers_per_stage=run_cfg.workers_per_stage,
+        input_single_file=run_cfg.input_single_file,
     )
 
 
@@ -179,6 +181,19 @@ def _discover_input_rows(plan: JobPlan, extensions: tuple[str, ...]) -> List[Tup
 
 
 def discover_image_work(plan: JobPlan) -> List[ImageWorkItem]:
+    if plan.input_single_file:
+        f = plan.input_single_file
+        if plan.skip_existing:
+            out_name = build_output_name(f, plan.output_suffix)
+            if os.path.exists(os.path.join(plan.output_path, out_name)):
+                return []
+        return [
+            ImageWorkItem(
+                filename=f,
+                output_name=build_output_name(f, plan.output_suffix),
+            )
+        ]
+
     image_rows = _discover_input_rows(plan, (".png", ".jpg", ".jpeg"))
     image_files = [name for (name, _mtime, _ctime, _size) in image_rows]
     if plan.skip_existing:
@@ -200,6 +215,25 @@ def discover_image_work(plan: JobPlan) -> List[ImageWorkItem]:
 
 
 def discover_video_work(plan: JobPlan) -> List[VideoWorkItem]:
+    if plan.input_single_file:
+        f = plan.input_single_file
+        if plan.skip_existing:
+            out_name = build_output_name(f, plan.output_suffix)
+            if os.path.exists(os.path.join(plan.output_path, out_name)):
+                return []
+        full_path = os.path.join(plan.input_path, f)
+        try:
+            size = os.path.getsize(full_path)
+        except OSError:
+            size = 0
+        return [
+            VideoWorkItem(
+                filename=f,
+                size_bytes=size,
+                output_name=build_output_name(f, plan.output_suffix),
+            )
+        ]
+
     video_rows = _discover_input_rows(plan, (".mp4", ".mkv", ".avi", ".mov"))
     ordered: List[Tuple[str, int]] = [(name, size) for (name, _mtime, _ctime, size) in video_rows]
     if plan.skip_existing:

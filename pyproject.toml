@@ -10,7 +10,17 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Proprietary" }
 authors = [{ name = "q1-FaceSwap Team" }]
-dependencies = []
+dependencies = [
+    "opencv-python>=4.8.0",
+    "scikit-image>=0.21.0",
+    "numpy<2.0.0",
+    "nicegui",
+    "onnxruntime-gpu>=1.17.0",
+    "insightface>=0.7.3",
+    "safetensors>=0.4.0",
+    "rich>=14.0.0",
+    "nvidia-ml-py>=12.535.0"
+]
 
 [project.scripts]
 q1-faceswap = "core.__main__:main"

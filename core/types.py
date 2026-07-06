@@ -26,11 +26,15 @@ class ProviderPolicy:
 
 @dataclass(frozen=True)
 class RunConfig:
-    # ── Identity ──────────────────────────────────────────────────────────────
+    # ── Identity ────────────────────────────────────────────────────────────────
     face_name: str
     format_is_image: bool
     input_path: str
     output_dir: str
+    # When True, source_face_path is an image file; embedding detected at startup.
+    face_source_is_image: bool
+    # Non-empty when processing a single file rather than a directory.
+    input_single_file: str
 
     # ── Pipeline switches ─────────────────────────────────────────────────────
     enable_swapper: bool
@@ -48,8 +52,6 @@ class RunConfig:
     restore_blend: float
 
     # ── Parser ────────────────────────────────────────────────────────────────
-    parser_choice: str         # "1" BiSeNet | "2" SegFormer
-    parser_type: str           # "bisenet" | "segformer"  (derived)
     parser_mask_blur: int
     preserve_swap_eyes: bool
 
@@ -211,6 +213,8 @@ def build_run_config_from_cfg(cfg_module) -> RunConfig:
         format_is_image=cfg_module.FORMAT_IS_IMAGE,
         input_path=cfg_module.INPUT_PATH,
         output_dir=cfg_module.OUTPUT_DIR,
+        face_source_is_image=cfg_module.FACE_SOURCE_IS_IMAGE,
+        input_single_file=cfg_module.INPUT_SINGLE_FILE,
         enable_swapper=cfg_module.ENABLE_SWAPPER,
         enable_restore=cfg_module.ENABLE_RESTORE,
         enable_parser=cfg_module.ENABLE_PARSER,
@@ -220,8 +224,6 @@ def build_run_config_from_cfg(cfg_module) -> RunConfig:
         restore_model_name=cfg_module.RESTORE_MODEL_NAME,
         restore_weight=cfg_module.RESTORE_WEIGHT,
         restore_blend=cfg_module.RESTORE_BLEND,
-        parser_choice=cfg_module.PARSER_CHOICE,
-        parser_type=cfg_module.PARSER_TYPE,
         parser_mask_blur=cfg_module.PARSER_MASK_BLUR,
         preserve_swap_eyes=cfg_module.PRESERVE_SWAP_EYES,
         workers_per_stage=cfg_module.WORKERS_PER_STAGE,

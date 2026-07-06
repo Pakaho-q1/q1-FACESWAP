@@ -99,9 +99,12 @@ class ModelManager:
             status_list.append("parser=on")
         pipeline_status = " | ".join(status_list) if status_list else "all_off"
 
+        face_label = self.cfg.face_name
+        if getattr(self.cfg, "face_source_is_image", False):
+            face_label += " [image]"
         ui_print(
-            f"\n[Target Face]: {self.cfg.face_name} | [Format]: {format_text}",
-            f"\n[Target Face]: {self.cfg.face_name} | [Format]: {format_text}",
+            f"\n[Target Face]: {face_label} | [Format]: {format_text}",
+            f"\n[Target Face]: {face_label} | [Format]: {format_text}",
         )
         ui_print(f"[Pipeline Status]: {pipeline_status}", f"[Pipeline Status]: {pipeline_status}")
         ui_print(
@@ -176,7 +179,20 @@ class ModelManager:
                             self.cfg.swapper_model,
                             providers=self._get_providers("face_swap", "swap", True),
                         )
+                    if getattr(self.cfg, "face_source_is_image", False):
+                        from core.face_image_loader import load_source_face_from_image
+                        ui_print(
+                            f"Detecting source face from image: {os.path.basename(self.cfg.source_face_path)}...",
+                            f"Detecting source face from image: {os.path.basename(self.cfg.source_face_path)}...",
+                        )
+                        self.source_face = load_source_face_from_image(
+                            image_path=self.cfg.source_face_path,
+                            insightface_root=self.cfg.insightface_root,
+                            provider=self.cfg.provider_policy.for_stage("detect"),
+                        )
+                    else:
                         self.source_face = load_source_face(self.cfg.source_face_path)
+
 
                 if self.cfg.enable_restore:
                     ui_print(

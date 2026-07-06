@@ -289,3 +289,66 @@ def resume_pipeline_job(
         )
     except ConfigError:
         raise
+
+
+def run_cli() -> None:
+    import sys
+    import core.config as cfg
+    
+    # Parse CLI arguments and initialize config globals
+    parsed_args = cfg.ensure_cli_initialized()
+    command = getattr(parsed_args, "command", "run")
+    
+    if command == "run":
+        run_pipeline(cfg_module=cfg)
+    elif command == "gui":
+        # Launch NiceGUI
+        from nicegui import ui
+        from gui.main import build_page
+        
+        host = getattr(parsed_args, "host", "127.0.0.1")
+        port = getattr(parsed_args, "port", 8080)
+        reload = not getattr(parsed_args, "no_reload", False)
+        
+        build_page()
+        if sys.platform == "win32":
+            import asyncio
+            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+        
+        ui.run(title="q1-FaceSwap", host=host, port=port, reload=reload)
+    elif command == "sync":
+        # Sync models
+        manifest = cfg.manifest
+        models_dir = cfg.MODELS_DIR
+        all_filenames = [entry["filename"] for entry in manifest["models"]]
+        
+        if getattr(parsed_args, "force", False):
+            print("Force sync requested. Cleaning up existing model files...")
+            for filename in all_filenames:
+                local_path = os.path.join(models_dir, filename)
+                if os.path.isfile(local_path):
+                    try:
+                        os.remove(local_path)
+                        print(f"Removed: {local_path}")
+                    except OSError as exc:
+                        print(f"Failed to remove {local_path}: {exc}")
+                        
+        print(f"Syncing models from manifest to {models_dir}...")
+        try:
+            cfg._sync_models_from_manifest(
+                models_dir=models_dir,
+                manifest=manifest,
+                preload_models=True,
+                required_filenames=set(all_filenames)
+            )
+            print("Sync completed successfully.")
+        except Exception as exc:
+            print(f"Error during sync: {exc}")
+            sys.exit(1)
+    elif command == "version":
+        from core.version import __version__
+        if getattr(parsed_args, "json", False):
+            import json
+            print(json.dumps({"version": __version__}))
+        else:
+            print(f"q1-FaceSwap version {__version__}")

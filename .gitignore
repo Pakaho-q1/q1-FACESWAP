@@ -37,3 +37,4 @@ assets/runtime/*
 !assets/runtime/.gitkeep
 assets/docs/New Text Document.txt
 TODO_100k_HARDENING.md
+AGENT.md
