@@ -4,7 +4,7 @@ build_gui.py
 Build the Tauri desktop GUI for q1-FaceSwap into a standalone binary.
 
 Requires: Node.js + npm + Rust toolchain installed on the system.
-Output: webui/src-tauri/target/release/app.exe (or q1-faceswap.exe)
+Output: webui/dist/gui.exe (copied from target/release/)
 
 Usage:
     python scripts/build_gui.py
@@ -56,20 +56,17 @@ def main():
 
     # Locate the built binary
     release_dir = os.path.join(webui_dir, "src-tauri", "target", "release")
-    candidates = ["app.exe", "q1-faceswap.exe", "app", "q1-faceswap"]
-    found = None
-    for name in candidates:
-        path = os.path.join(release_dir, name)
-        if os.path.isfile(path):
-            found = path
-            break
-
-    print()
-    if found:
-        print(f"[SUCCESS] GUI binary built at: {found}")
+    dest_dir = os.path.join(webui_dir, "dist")
+    os.makedirs(dest_dir, exist_ok=True)
+    src_exe = os.path.join(release_dir, "app.exe")
+    dest_exe = os.path.join(dest_dir, "gui.exe")
+    if os.path.isfile(src_exe):
+        import shutil
+        shutil.copy2(src_exe, dest_exe)
+        print(f"[SUCCESS] GUI binary copied to: {dest_exe}")
         print(f"Run it: python faceswap.py gui")
     else:
-        print(f"[WARN] Build completed but binary not found in {release_dir}")
+        print(f"[WARN] app.exe not found in {release_dir}")
         print("Check the Tauri build output above for errors.")
 
 

@@ -201,7 +201,7 @@ def main() -> None:
         sys.exit(1)
 
     console.print(f"\n[green bold]Done![/] Models saved to: [yellow]{models_dir}[/]")
-    console.print("Run: [bold]python faceswap.py ...[/] or [bold]q1-faceswap ...[/]")
+    console.print("Run: [bold]python faceswap.py ...[/] or [bold]python faceswap.py gui[/]")
 
 
 if __name__ == "__main__":

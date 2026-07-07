@@ -19,7 +19,6 @@ dependencies = [
     "safetensors>=0.4.0",
     "huggingface-hub>=0.20.0",
     "rich>=14.0.0",
-    "nvidia-ml-py>=12.535.0"
 ]
 
 [project.optional-dependencies]

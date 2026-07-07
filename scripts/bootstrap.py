@@ -105,6 +105,9 @@ def main() -> None:
         if run_command([sys.executable, "-m", "pip", "show", "onnxruntime-gpu"]):
             print("[INFO] Removing stale onnxruntime-gpu (no CUDA detected)...")
             run_command([sys.executable, "-m", "pip", "uninstall", "-y", "onnxruntime-gpu"])
+            # Reinstall CPU onnxruntime since onnxruntime-gpu uninstall may remove it
+            print("[INFO] Ensuring CPU onnxruntime is installed...")
+            run_command([sys.executable, "-m", "pip", "install", "onnxruntime"])
 
     print_step("STEP 4: GPU Acceleration Diagnostics")
     try:

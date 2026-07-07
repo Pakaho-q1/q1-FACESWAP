@@ -332,11 +332,10 @@ def run_cli() -> None:
             # Pre-built binary paths (Tauri build output)
             binary_candidates = [
                 os.path.join(webui_dir, "src-tauri", "target", "release", "app.exe"),
-                os.path.join(webui_dir, "src-tauri", "target", "release", "q1-faceswap.exe"),
-                os.path.join(webui_dir, "src-tauri", "target", "release", "app"),
-                os.path.join(webui_dir, "src-tauri", "target", "release", "q1-faceswap"),
-                os.path.join(root_dir, "dist", "q1-faceswap.exe"),
-                os.path.join(root_dir, "dist", "q1-faceswap"),
+                os.path.join(webui_dir, "dist", "gui.exe"),
+                os.path.join(webui_dir, "dist", "gui"),
+                os.path.join(root_dir, "dist", "gui.exe"),
+                os.path.join(root_dir, "dist", "gui"),
             ]
 
             gui_binary = None
