@@ -3,9 +3,12 @@ opencv-python>=4.8.0
 scikit-image>=0.21.0
 numpy<2.0.0
 # AI Models & Inference
-onnxruntime-gpu>=1.17.0
+onnxruntime>=1.17.0
 insightface>=0.7.3
 safetensors>=0.4.0
+
+# GPU acceleration (install manually if CUDA available):
+# pip install onnxruntime-gpu>=1.17.0
 
 # System Monitoring & Utilities
 rich>=14.0.0

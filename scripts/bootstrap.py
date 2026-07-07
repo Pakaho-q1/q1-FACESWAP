@@ -75,25 +75,36 @@ def main() -> None:
         print_err(f"Dependency manifest not found at: {requirements_path}")
         sys.exit(1)
 
-    print_step("STEP 3: Resolve ONNX Runtime Provider Conflicts")
-    print("[INFO] Auditing onnxruntime installation...")
-    # Only uninstall onnxruntime CPU if it's explicitly installed as a standalone package to prevent breaking onnxruntime-gpu
-    if run_command([sys.executable, "-m", "pip", "show", "onnxruntime"]):
-        print("[INFO] Resolving ONNX Runtime CPU package conflict...")
-        run_command([sys.executable, "-m", "pip", "uninstall", "-y", "onnxruntime"])
-        # Repair onnxruntime-gpu if it was broken by the uninstall
-        if run_command([sys.executable, "-m", "pip", "show", "onnxruntime-gpu"]):
-            print("[INFO] Repairing onnxruntime-gpu installation...")
-            run_command([sys.executable, "-m", "pip", "install", "--force-reinstall", "onnxruntime-gpu", "numpy<2.0.0"])
+    print_step("STEP 3: GPU Acceleration — ONNX Runtime Auto-Detect")
+    print("[INFO] Checking for NVIDIA CUDA-capable GPU...")
+    has_cuda = False
+    try:
+        from pynvml import nvmlInit, nvmlDeviceGetCount, nvmlShutdown
+        nvmlInit()
+        device_count = nvmlDeviceGetCount()
+        nvmlShutdown()
+        has_cuda = device_count > 0
+        if has_cuda:
+            print_ok(f"Detected {device_count} NVIDIA GPU(s).")
+        else:
+            print_ok("No NVIDIA GPU detected.")
+    except Exception:
+        print_ok("nvidia-ml-py not available; cannot detect GPU.")
 
-    if run_command([sys.executable, "-m", "pip", "show", "onnxruntime-gpu"]):
-        print_ok("onnxruntime-gpu is installed correctly.")
-    else:
-        print_warn("onnxruntime-gpu not detected. Installing onnxruntime-gpu...")
+    if has_cuda:
+        print("[INFO] CUDA GPU found. Upgrading to onnxruntime-gpu for hardware acceleration...")
+        # onnxruntime-gpu replaces onnxruntime (CPU) — they conflict
         if run_command([sys.executable, "-m", "pip", "install", "onnxruntime-gpu", "numpy<2.0.0"]):
             print_ok("onnxruntime-gpu installed successfully.")
         else:
-            print_err("Failed to install onnxruntime-gpu.")
+            print_warn("onnxruntime-gpu install failed; falling back to CPU onnxruntime.")
+    else:
+        print_ok("Using CPU onnxruntime (safe default).")
+        print("[HINT] To enable GPU later: pip install onnxruntime-gpu")
+        # Remove stale onnxruntime-gpu if previously installed on a system that no longer has CUDA
+        if run_command([sys.executable, "-m", "pip", "show", "onnxruntime-gpu"]):
+            print("[INFO] Removing stale onnxruntime-gpu (no CUDA detected)...")
+            run_command([sys.executable, "-m", "pip", "uninstall", "-y", "onnxruntime-gpu"])
 
     print_step("STEP 4: GPU Acceleration Diagnostics")
     try:
