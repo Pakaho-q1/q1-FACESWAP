@@ -557,20 +557,11 @@ subparsers = parser.add_subparsers(dest="command", help="Subcommand to run")
 # 1. run subparser (inherits all parent_parser options)
 run_parser = subparsers.add_parser("run", parents=[parent_parser], help="Run face swap pipeline")
 
-# 2. gui subparser (inherits parent_parser for settings, adds gui specific flags)
-gui_parser = subparsers.add_parser("gui", parents=[parent_parser], help="Launch NiceGUI web interface")
-gui_parser.add_argument(
-    "--host", type=str, default="127.0.0.1",
-    help="Bind address for NiceGUI server.",
-)
-gui_parser.add_argument(
-    "--port", type=int, default=8080,
-    help="Port number to listen on.",
-)
-gui_parser.add_argument(
-    "--no-reload", action="store_true",
-    help="Disable automatic development reload.",
-)
+# 2. webui subparser (inherits parent_parser for settings)
+webui_parser = subparsers.add_parser("webui", parents=[parent_parser], help="Launch Tauri desktop interface")
+
+# 3. gui subparser (alias for compatibility)
+gui_parser = subparsers.add_parser("gui", parents=[parent_parser], help="Launch Tauri desktop interface")
 
 # 3. sync subparser
 sync_parser = subparsers.add_parser("sync", parents=[parent_parser], help="Sync/download required models")
@@ -929,7 +920,7 @@ def _preprocess_argv(argv):
     else:
         argv = list(argv)
     
-    subcommands = {"run", "gui", "sync", "version"}
+    subcommands = {"run", "webui", "gui", "sync", "version"}
     
     # Check if a subcommand is already present
     has_subcommand = any(arg in subcommands for arg in argv)

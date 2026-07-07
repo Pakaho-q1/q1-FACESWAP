@@ -121,8 +121,9 @@ def run_pipeline(
     validate_run_config(runtime_ctx.config)
     _attach_gui_telemetry_hooks(runtime_ctx)
 
+    log_level_str = str(cfg_module.LOG_LEVEL).upper()
     logging.basicConfig(
-        level=getattr(logging, cfg_module.LOG_LEVEL, logging.WARNING),
+        level=getattr(logging, log_level_str, logging.WARNING),
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
 
@@ -301,21 +302,51 @@ def run_cli() -> None:
     
     if command == "run":
         run_pipeline(cfg_module=cfg)
-    elif command == "gui":
-        # Launch NiceGUI
-        from nicegui import ui
-        from gui.main import build_page
-        
-        host = getattr(parsed_args, "host", "127.0.0.1")
-        port = getattr(parsed_args, "port", 8080)
-        reload = not getattr(parsed_args, "no_reload", False)
-        
-        build_page()
-        if sys.platform == "win32":
-            import asyncio
-            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-        
-        ui.run(title="q1-FaceSwap", host=host, port=port, reload=reload)
+    elif command in ("webui", "gui"):
+        import os
+        import subprocess
+        import threading
+        import socket
+        import time
+        from core.web_server import start_api_server
+
+        def get_lan_ip():
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            try:
+                s.connect(('10.255.255.255', 1))
+                ip = s.getsockname()[0]
+            except Exception:
+                ip = '127.0.0.1'
+            finally:
+                s.close()
+            return ip
+
+        if command == "gui":
+            print("Starting background API/static web server on localhost port 8234...")
+            threading.Thread(target=start_api_server, args=(8234, "127.0.0.1"), daemon=True).start()
+            
+            webui_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "webui")
+            print("Launching Tauri Desktop GUI App...")
+            try:
+                shell = (sys.platform == "win32")
+                subprocess.run(["npx", "tauri", "dev"], cwd=webui_dir, shell=shell, check=True)
+            except KeyboardInterrupt:
+                print("\nGUI process terminated by user.")
+            except Exception as e:
+                sys.stderr.write(f"Error launching Tauri GUI: {e}\n")
+                sys.exit(1)
+        else: # webui
+            lan_ip = get_lan_ip()
+            print("\n" + "="*50)
+            print("  q1-FaceSwap WebUI Server is running!")
+            print(f"  ➜ Local:   http://localhost:8234/")
+            print(f"  ➜ Network: http://{lan_ip}:8234/")
+            print("  Press Ctrl+C to terminate.")
+            print("="*50 + "\n")
+            try:
+                start_api_server(8234, "0.0.0.0")
+            except KeyboardInterrupt:
+                print("\nServer terminated by user.")
     elif command == "sync":
         # Sync models
         manifest = cfg.manifest

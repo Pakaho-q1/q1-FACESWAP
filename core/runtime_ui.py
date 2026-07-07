@@ -1,4 +1,4 @@
-﻿import threading
+import threading
 import time
 
 from core.ui_log import ui_print
@@ -29,6 +29,13 @@ class RuntimeUI:
         )
 
     def start(self):
+        import sys
+        import os
+        # Disable Live console rendering when running as a GUI subprocess or when stdout is not a TTY
+        if os.environ.get("Q1_GUI_EVENTS") == "1" or not sys.stdout.isatty():
+            self._enabled = False
+            return
+
         try:
             from rich.live import Live
             from rich.progress import (
