@@ -55,6 +55,9 @@ dist/
 webui/src-tauri/target/
 webui/src-tauri/gen/
 
+# pip install -e . build artifacts
+*.egg-info/
+
 # Temporary download / partial files
 *.tmp
 *.part
