@@ -325,15 +325,47 @@ def run_cli() -> None:
             print("Starting background API/static web server on localhost port 8234...")
             threading.Thread(target=start_api_server, args=(8234, "127.0.0.1"), daemon=True).start()
             
-            webui_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "webui")
-            print("Launching Tauri Desktop GUI App...")
-            try:
-                shell = (sys.platform == "win32")
-                subprocess.run(["npx", "tauri", "dev"], cwd=webui_dir, shell=shell, check=True)
-            except KeyboardInterrupt:
-                print("\nGUI process terminated by user.")
-            except Exception as e:
-                sys.stderr.write(f"Error launching Tauri GUI: {e}\n")
+            root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            webui_dir = os.path.join(root_dir, "webui")
+            scripts_dir = os.path.join(root_dir, "scripts")
+
+            # Pre-built binary paths (Tauri build output)
+            binary_candidates = [
+                os.path.join(webui_dir, "src-tauri", "target", "release", "app.exe"),
+                os.path.join(webui_dir, "src-tauri", "target", "release", "q1-faceswap.exe"),
+                os.path.join(webui_dir, "src-tauri", "target", "release", "app"),
+                os.path.join(webui_dir, "src-tauri", "target", "release", "q1-faceswap"),
+                os.path.join(root_dir, "dist", "q1-faceswap.exe"),
+                os.path.join(root_dir, "dist", "q1-faceswap"),
+            ]
+
+            gui_binary = None
+            for p in binary_candidates:
+                if os.path.isfile(p):
+                    gui_binary = p
+                    break
+
+            if gui_binary:
+                print(f"Launching built GUI: {gui_binary}")
+                try:
+                    subprocess.run([gui_binary], check=True)
+                except KeyboardInterrupt:
+                    print("\nGUI process terminated by user.")
+                except Exception as e:
+                    sys.stderr.write(f"Error launching GUI binary: {e}\n")
+                    sys.exit(1)
+            else:
+                print("No pre-built GUI binary found.")
+                build_script = os.path.join(scripts_dir, "build_gui.py")
+                if os.path.isfile(build_script):
+                    print(f"Run: python {build_script}")
+                else:
+                    print("To build the GUI:")
+                    print(f"  cd {webui_dir}")
+                    print("  npm install")
+                    print("  npm run tauri build")
+                print("Or use 'webui' command instead to open in browser:")
+                print("  python faceswap.py webui")
                 sys.exit(1)
         else: # webui
             lan_ip = get_lan_ip()

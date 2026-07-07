@@ -6,6 +6,7 @@ numpy<2.0.0
 onnxruntime>=1.17.0
 insightface>=0.7.3
 safetensors>=0.4.0
+huggingface-hub>=0.20.0
 
 # GPU acceleration (install manually if CUDA available):
 # pip install onnxruntime-gpu>=1.17.0
