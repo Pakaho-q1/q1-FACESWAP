@@ -7,7 +7,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python 3.10+"/>
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey" alt="Platform Windows | Linux"/>
-  <img src="https://img.shields.io/badge/license-Proprietary-red" alt="License"/>
+  <img src="https://img.shields.io/badge/license-Proprietary-lightgrey" alt="License"/>
 </p>
 
 ---
@@ -17,6 +17,19 @@
 q1-FaceSwap is a production-grade face swapping system that combines ONNX Runtime inference with an intelligent **swarm engine** to maximize GPU utilization. It automatically scales worker threads across pipeline stages (detect → swap → restore → parse) based on real-time queue pressure, keeping your GPU saturated at all times.
 
 Built for **NVIDIA CUDA GPUs** with automatic fallback to CPU for users without dedicated hardware.
+
+---
+
+## Responsible Use
+
+Face-swapping technology can be misused to create misleading or non-consensual content. By using q1-FaceSwap, you agree to:
+
+- Only process images/videos of individuals who have given **explicit consent**, or content you own the rights to
+- **Never** use this tool to create non-consensual intimate imagery, harassment material, or content intended to deceive, defame, or impersonate someone without their knowledge
+- Clearly **disclose** when media has been synthetically altered, where required by law or platform policy
+- Comply with all applicable local, national, and international laws regarding synthetic media, privacy, and likeness rights
+
+This project is provided for legitimate use cases such as film/VFX production, research, art, and authorized creative work. The maintainers are not responsible for misuse of this software by end users.
 
 ### Key Features
 
@@ -76,10 +89,13 @@ python faceswap.py gui
 
 ```bash
 # Run face swap on a single image
-python faceswap.py run --face-model-name alice --input-path ./input/photo.jpg
+python faceswap.py run --input-face face.jpg --input-target target.jpg --output "D:/output"
 
-# Run on a video
-python faceswap.py run --face-model-name alice --format 2 --input-path ./input/video.mp4
+# Run face swap on a all image in folder 
+python faceswap.py run --input-face face.jpg --input-target "D:/target" --output "D:/output"
+
+# Run face swap on a video
+python faceswap.py run --input-face face.jpg --input-target target.mp4 --output "D:/output"
 
 # Launch Web UI in browser
 python faceswap.py webui
@@ -204,7 +220,9 @@ q1-FaceSwap bundles and distributes the following third-party models. We are gra
 
 ## License
 
-Proprietary. All rights reserved.
+The q1-FaceSwap engine, swarm scheduler, and application code are **proprietary — all rights reserved**.
+
+This software bundles and depends on several third-party, open-source models (InsightFace, GFPGAN, GPEN, CodeFormer, CelebAMask-HQ SegFormer) and libraries (FFmpeg), each of which remains governed by **its own original license** as listed in [Model Credits](#model-credits). Use of those components must comply with the terms set by their respective authors, independent of this project's proprietary license.
 
 ---
 
