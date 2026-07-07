@@ -1,2 +1,0 @@
-[console_scripts]
-q1-faceswap = core.__main__:main
