@@ -19,6 +19,7 @@ __pycache__/
 **/__pycache__/
 **/*.pyc
 **/.ipynb_checkpoints/
+**q1_faceswap.egg-info/
 *.aac
 *.mp3
 *.wav
