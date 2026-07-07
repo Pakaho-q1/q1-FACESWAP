@@ -55,5 +55,12 @@ dist/
 webui/src-tauri/target/
 webui/src-tauri/gen/
 
+# Temporary download / partial files
+*.tmp
+*.part
+
+# Model weight files (downloaded, not source)
+*.safetensors
+
 # Agent directory
 .agent/
