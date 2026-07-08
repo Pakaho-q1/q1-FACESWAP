@@ -9,7 +9,8 @@ export function usePipelineEvents() {
   const setTunerStatus = usePipelineStore((state) => state.setTunerStatus);
 
   useEffect(() => {
-    const host = typeof window !== "undefined" ? window.location.hostname : "localhost";
+    const rawHost = typeof window !== "undefined" ? window.location.hostname : "127.0.0.1";
+    const host = (rawHost === "localhost" || rawHost === "tauri.localhost" || rawHost.endsWith(".localhost") || rawHost === "localhost.localdomain" || rawHost === "[::1]" || !rawHost) ? "127.0.0.1" : rawHost;
     const apiBase = `http://${host}:8234`;
     let timerId: any = null;
     let isActive = true;

@@ -18,9 +18,35 @@ STATE = {
     "swarm_state": None # Stores tuner status dictionary
 }
 
+import traceback
+import datetime
+
 STATE_LOCK = threading.Lock()
 ACTIVE_THREAD = None
 CANCEL_EVENT = threading.Event()
+
+def log_error_to_file(error_msg, exception=None):
+    try:
+        import core.config as cfg
+        project_path = getattr(cfg, "PROJECT_PATH", "")
+        if not project_path:
+            project_path = os.getcwd()
+            
+        log_dir = os.path.join(project_path, "assets", "docs")
+        os.makedirs(log_dir, exist_ok=True)
+        log_path = os.path.join(log_dir, "log.txt")
+        
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        log_entry = f"[{timestamp}] {error_msg}\n"
+        if exception:
+            log_entry += f"Traceback:\n"
+            log_entry += "".join(traceback.format_exception(type(exception), exception, exception.__traceback__))
+        log_entry += "-" * 50 + "\n"
+        
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(log_entry)
+    except Exception as log_err:
+        sys.stderr.write(f"Failed to write to log.txt: {log_err}\n")
 
 def set_cors_headers(handler):
     handler.send_header("Access-Control-Allow-Origin", "*")
@@ -272,149 +298,149 @@ def run_pipeline_worker(config_data):
     global CANCEL_EVENT
     CANCEL_EVENT.clear()
 
-    # Project settings
-    project_path = config_data.get("PROJECT_PATH", "").strip()
-    if project_path:
-        cfg.PROJECT_PATH = cfg.normalize_project_root(project_path)
-    else:
-        cfg.PROJECT_PATH = cfg._resolve_default_project_root(cfg.BASE_DIR)
-
-    layout = cfg.ensure_project_layout(cfg.PROJECT_PATH, cfg.SOURCE_ASSETS_DIR)
-    cfg.ASSETS_HOME = layout.assets_dir
-    cfg.MODELS_DIR = layout.models_dir
-    cfg.FACES_DIR = layout.faces_dir
-    cfg.TEMP_AUDIO_DIR = layout.temp_audio_dir
-    cfg.TENSORRT_HOME = layout.tensorrt_home
-    cfg.TRT_CACHE_DIR = layout.trt_cache_dir
-    
-    cfg.TRT_CACHE_DETECT_DIR = os.path.join(cfg.TRT_CACHE_DIR, "trt_cache_detect")
-    cfg.TRT_CACHE_SWAP_DIR = os.path.join(cfg.TRT_CACHE_DIR, "trt_cache_swap")
-    cfg.TRT_CACHE_RESTORE_DIR = os.path.join(cfg.TRT_CACHE_DIR, "trt_cache_restore")
-    cfg.TRT_CACHE_PARSER_DIR = os.path.join(cfg.TRT_CACHE_DIR, "trt_cache_parser")
-    cfg.INSIGHTFACE_ROOT = os.path.join(cfg.MODELS_DIR, "insightface_models")
-
-    # Identifiers & Paths
-    raw_face = config_data.get("INPUT_FACE", "").strip()
-    cfg.FACE_NAME, cfg.SOURCE_FACE_PATH, cfg.FACE_SOURCE_IS_IMAGE = cfg._resolve_input_face(raw_face, cfg.FACES_DIR)
-
-    raw_target = config_data.get("INPUT_TARGET", "").strip()
-    cfg.INPUT_PATH, cfg.INPUT_SINGLE_FILE, _fmt_override = cfg._resolve_input_target(raw_target)
-    if _fmt_override is not None:
-        cfg.FORMAT_IS_IMAGE = _fmt_override
-    else:
-        cfg.FORMAT_IS_IMAGE = (config_data.get("FORMAT", "video") == "image")
-
-    out_dir = config_data.get("OUTPUT_PATH", "").strip()
-    if out_dir:
-        cfg.OUTPUT_DIR = os.path.abspath(out_dir)
-    else:
-        if cfg.FORMAT_IS_IMAGE:
-            cfg.OUTPUT_DIR = os.path.join(layout.output_dir, "image", cfg.FACE_NAME)
-        else:
-            cfg.OUTPUT_DIR = os.path.join(layout.output_dir, "video", cfg.FACE_NAME)
-
-    # Ensure output directory exists
-    os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
-
-    # Switches
-    cfg.ENABLE_SWAPPER = config_data.get("USE_SWAPER", True)
-    cfg.SWAPPER_BLEND = config_data.get("SWAPER_WEIGH", 0.70)
-    cfg.ENABLE_RESTORE = config_data.get("USE_RESTORE", True)
-    cfg.RESTORE_CHOICE = config_data.get("RESTORE_CHOICE", "1")
-    cfg.RESTORE_WEIGHT = config_data.get("RESTORE_WEIGH", 0.70)
-    cfg.RESTORE_BLEND = config_data.get("RESTORE_BLEND", 0.70)
-    cfg.ENABLE_PARSER = config_data.get("USE_PARSER", True)
-    cfg.PRESERVE_SWAP_EYES = config_data.get("PRESERVE_SWAP_EYES", True)
-    cfg.PARSER_MASK_BLUR = config_data.get("PARSER_MASK_BLUR", 21)
-
-    # Models
-    cfg.SWAPPER_MODEL = os.path.join(cfg.MODELS_DIR, "inswapper_128.onnx")
-    cfg.PARSER_TYPE = "segformer"
-    cfg.PARSER_MODEL = os.path.join(cfg.MODELS_DIR, "Segformer_CelebAMask-HQ.onnx")
-
-    if cfg.RESTORE_CHOICE == "2":
-        cfg.RESTORE_MODEL_NAME = "GPEN-BFR-512.onnx"
-        cfg.RESTORE_SIZE = 512
-    elif cfg.RESTORE_CHOICE == "3":
-        cfg.RESTORE_MODEL_NAME = "GPEN-BFR-1024.onnx"
-        cfg.RESTORE_SIZE = 1024
-    elif cfg.RESTORE_CHOICE == "4":
-        cfg.RESTORE_MODEL_NAME = "codeformer.onnx"
-        cfg.RESTORE_SIZE = 512
-    else:
-        cfg.RESTORE_MODEL_NAME = "GFPGANv1.4.onnx"
-        cfg.RESTORE_SIZE = 512
-    cfg.RESTORE_MODEL_PATH = os.path.join(cfg.MODELS_DIR, cfg.RESTORE_MODEL_NAME)
-
-    cfg.FFMPEG_CMD = os.path.join(cfg.MODELS_DIR, cfg._platform_ffmpeg_name())
-
-    # Performance
-    cfg.PROVIDER_ALL = config_data.get("PROVIDER_ALL", "trt")
-    cfg.PROVIDER_POLICY["detect"] = config_data.get("PROVIDER_DETECT", "auto")
-    cfg.PROVIDER_POLICY["swap"] = config_data.get("PROVIDER_SWAPER", "auto")
-    cfg.PROVIDER_POLICY["restore"] = config_data.get("PROVIDER_RESTORE", "auto")
-    cfg.PROVIDER_POLICY["parse"] = config_data.get("PROVIDER_PARSER", "auto")
-
-    for _stage, _provider in cfg.PROVIDER_POLICY.items():
-        if _provider == "auto":
-            cfg.PROVIDER_POLICY[_stage] = cfg.PROVIDER_ALL
-        else:
-            cfg.PROVIDER_POLICY[_stage] = cfg._parse_provider(_provider, f"PROVIDER_{_stage.upper()}")
-
-    cfg.WORKERS_PER_STAGE = config_data.get("WORKERS_PER_STAGE", 8)
-    cfg.WORKER_QUEUE_SIZE = config_data.get("WORKER_QUEUE_SIZE", 64)
-    cfg.OUT_QUEUE_SIZE = config_data.get("OUT_QUEUE_SIZE", 128)
-    cfg.TUNER_MODE = config_data.get("TUNER_MODE", "auto")
-    cfg.GPU_TARGET_UTIL = config_data.get("GPU_TARGET_UTIL", 95)
-    cfg.HIGH_WATERMARK = config_data.get("HIGH_WATERMARK", 12)
-    cfg.LOW_WATERMARK = config_data.get("LOW_WATERMARK", 4)
-    cfg.SWITCH_COOLDOWN_S = config_data.get("SWITCH_COOLDOWN_S", 0.35)
-
-    # Run behavior
-    cfg.MAX_FRAMES = config_data.get("MAX_FRAMES", 0)
-    cfg.MAX_RETRIES = config_data.get("MAX_RETRIES", 2)
-    cfg.SKIP_EXISTING = config_data.get("SKIP_EXISTING", True)
-    cfg.OUTPUT_SUFFIX = config_data.get("OUTPUT_SUFFIX", "")
-    cfg.FILE_SORTING = config_data.get("FILE_SORTING", "date_modified_newest")
-
-    cfg.PRELOAD_MODELS = config_data.get("PRELOAD_MODELS", False)
-    cfg.DRY_RUN = config_data.get("DRY_RUN", False)
-    cfg.PRINT_EFFECTIVE_CONFIG = config_data.get("PRINT_EFFECTIVE_CONFIG", False)
-    cfg.LOG_LEVEL = config_data.get("LOG_LEVEL", "WARNING").upper()
-
-    # Path validations (mirroring the checks in config.py)
-    if not cfg.FACE_NAME and cfg.ENABLE_SWAPPER:
-        raise ValueError("Source face is required when swapper is enabled.")
-    if not cfg.INPUT_PATH:
-        raise ValueError("Target input path is required.")
-
-    if cfg.ENABLE_SWAPPER and not os.path.isfile(cfg.SOURCE_FACE_PATH):
-        if cfg.FACE_SOURCE_IS_IMAGE:
-            raise FileNotFoundError(f"Source face image not found: {cfg.SOURCE_FACE_PATH}")
-        else:
-            raise FileNotFoundError(f"Source face model (.safetensors) not found: {cfg.SOURCE_FACE_PATH}")
-
-    if cfg.INPUT_SINGLE_FILE:
-        single_file_full = os.path.join(cfg.INPUT_PATH, cfg.INPUT_SINGLE_FILE)
-        if not os.path.isfile(single_file_full):
-            raise FileNotFoundError(f"Input file does not exist: {single_file_full}")
-    else:
-        if not os.path.isdir(cfg.INPUT_PATH):
-            raise FileNotFoundError(f"Input directory does not exist: {cfg.INPUT_PATH}")
-
-    if cfg.ENABLE_SWAPPER and not os.path.isfile(cfg.SWAPPER_MODEL):
-        raise FileNotFoundError(f"Swapper model not found: {cfg.SWAPPER_MODEL}")
-
-    if cfg.ENABLE_RESTORE and not os.path.isfile(cfg.RESTORE_MODEL_PATH):
-        raise FileNotFoundError(f"Restore model not found: {cfg.RESTORE_MODEL_PATH}")
-
-    if cfg.ENABLE_PARSER and not os.path.isfile(cfg.PARSER_MODEL):
-        raise FileNotFoundError(f"Parser model not found: {cfg.PARSER_MODEL}")
-
-    if not os.path.isfile(cfg.FFMPEG_CMD):
-        raise FileNotFoundError(f"ffmpeg executable not found: {cfg.FFMPEG_CMD}")
-
     try:
+        # Project settings
+        project_path = config_data.get("PROJECT_PATH", "").strip()
+        if project_path:
+            cfg.PROJECT_PATH = cfg.normalize_project_root(project_path)
+        else:
+            cfg.PROJECT_PATH = cfg._resolve_default_project_root(cfg.BASE_DIR)
+
+        layout = cfg.ensure_project_layout(cfg.PROJECT_PATH, cfg.SOURCE_ASSETS_DIR)
+        cfg.ASSETS_HOME = layout.assets_dir
+        cfg.MODELS_DIR = layout.models_dir
+        cfg.FACES_DIR = layout.faces_dir
+        cfg.TEMP_AUDIO_DIR = layout.temp_audio_dir
+        cfg.TENSORRT_HOME = layout.tensorrt_home
+        cfg.TRT_CACHE_DIR = layout.trt_cache_dir
+        
+        cfg.TRT_CACHE_DETECT_DIR = os.path.join(cfg.TRT_CACHE_DIR, "trt_cache_detect")
+        cfg.TRT_CACHE_SWAP_DIR = os.path.join(cfg.TRT_CACHE_DIR, "trt_cache_swap")
+        cfg.TRT_CACHE_RESTORE_DIR = os.path.join(cfg.TRT_CACHE_DIR, "trt_cache_restore")
+        cfg.TRT_CACHE_PARSER_DIR = os.path.join(cfg.TRT_CACHE_DIR, "trt_cache_parser")
+        cfg.INSIGHTFACE_ROOT = os.path.join(cfg.MODELS_DIR, "insightface_models")
+
+        # Identifiers & Paths
+        raw_face = config_data.get("INPUT_FACE", "").strip()
+        cfg.FACE_NAME, cfg.SOURCE_FACE_PATH, cfg.FACE_SOURCE_IS_IMAGE = cfg._resolve_input_face(raw_face, cfg.FACES_DIR)
+
+        raw_target = config_data.get("INPUT_TARGET", "").strip()
+        cfg.INPUT_PATH, cfg.INPUT_SINGLE_FILE, _fmt_override = cfg._resolve_input_target(raw_target)
+        if _fmt_override is not None:
+            cfg.FORMAT_IS_IMAGE = _fmt_override
+        else:
+            cfg.FORMAT_IS_IMAGE = (config_data.get("FORMAT", "video") == "image")
+
+        out_dir = config_data.get("OUTPUT_PATH", "").strip()
+        if out_dir:
+            cfg.OUTPUT_DIR = os.path.abspath(out_dir)
+        else:
+            if cfg.FORMAT_IS_IMAGE:
+                cfg.OUTPUT_DIR = os.path.join(layout.output_dir, "image", cfg.FACE_NAME)
+            else:
+                cfg.OUTPUT_DIR = os.path.join(layout.output_dir, "video", cfg.FACE_NAME)
+
+        # Ensure output directory exists
+        os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
+
+        # Switches
+        cfg.ENABLE_SWAPPER = config_data.get("USE_SWAPER", True)
+        cfg.SWAPPER_BLEND = config_data.get("SWAPER_WEIGH", 0.70)
+        cfg.ENABLE_RESTORE = config_data.get("USE_RESTORE", True)
+        cfg.RESTORE_CHOICE = config_data.get("RESTORE_CHOICE", "1")
+        cfg.RESTORE_WEIGHT = config_data.get("RESTORE_WEIGH", 0.70)
+        cfg.RESTORE_BLEND = config_data.get("RESTORE_BLEND", 0.70)
+        cfg.ENABLE_PARSER = config_data.get("USE_PARSER", True)
+        cfg.PRESERVE_SWAP_EYES = config_data.get("PRESERVE_SWAP_EYES", True)
+        cfg.PARSER_MASK_BLUR = config_data.get("PARSER_MASK_BLUR", 21)
+
+        # Models
+        cfg.SWAPPER_MODEL = os.path.join(cfg.MODELS_DIR, "inswapper_128.onnx")
+        cfg.PARSER_TYPE = "segformer"
+        cfg.PARSER_MODEL = os.path.join(cfg.MODELS_DIR, "Segformer_CelebAMask-HQ.onnx")
+
+        if cfg.RESTORE_CHOICE == "2":
+            cfg.RESTORE_MODEL_NAME = "GPEN-BFR-512.onnx"
+            cfg.RESTORE_SIZE = 512
+        elif cfg.RESTORE_CHOICE == "3":
+            cfg.RESTORE_MODEL_NAME = "GPEN-BFR-1024.onnx"
+            cfg.RESTORE_SIZE = 1024
+        elif cfg.RESTORE_CHOICE == "4":
+            cfg.RESTORE_MODEL_NAME = "codeformer.onnx"
+            cfg.RESTORE_SIZE = 512
+        else:
+            cfg.RESTORE_MODEL_NAME = "GFPGANv1.4.onnx"
+            cfg.RESTORE_SIZE = 512
+        cfg.RESTORE_MODEL_PATH = os.path.join(cfg.MODELS_DIR, cfg.RESTORE_MODEL_NAME)
+
+        cfg.FFMPEG_CMD = os.path.join(cfg.MODELS_DIR, cfg._platform_ffmpeg_name())
+
+        # Performance
+        cfg.PROVIDER_ALL = config_data.get("PROVIDER_ALL", "trt")
+        cfg.PROVIDER_POLICY["detect"] = config_data.get("PROVIDER_DETECT", "auto")
+        cfg.PROVIDER_POLICY["swap"] = config_data.get("PROVIDER_SWAPER", "auto")
+        cfg.PROVIDER_POLICY["restore"] = config_data.get("PROVIDER_RESTORE", "auto")
+        cfg.PROVIDER_POLICY["parse"] = config_data.get("PROVIDER_PARSER", "auto")
+
+        for _stage, _provider in cfg.PROVIDER_POLICY.items():
+            if _provider == "auto":
+                cfg.PROVIDER_POLICY[_stage] = cfg.PROVIDER_ALL
+            else:
+                cfg.PROVIDER_POLICY[_stage] = cfg._parse_provider(_provider, f"PROVIDER_{_stage.upper()}")
+
+        cfg.WORKERS_PER_STAGE = config_data.get("WORKERS_PER_STAGE", 8)
+        cfg.WORKER_QUEUE_SIZE = config_data.get("WORKER_QUEUE_SIZE", 64)
+        cfg.OUT_QUEUE_SIZE = config_data.get("OUT_QUEUE_SIZE", 128)
+        cfg.TUNER_MODE = config_data.get("TUNER_MODE", "auto")
+        cfg.GPU_TARGET_UTIL = config_data.get("GPU_TARGET_UTIL", 95)
+        cfg.HIGH_WATERMARK = config_data.get("HIGH_WATERMARK", 12)
+        cfg.LOW_WATERMARK = config_data.get("LOW_WATERMARK", 4)
+        cfg.SWITCH_COOLDOWN_S = config_data.get("SWITCH_COOLDOWN_S", 0.35)
+
+        # Run behavior
+        cfg.MAX_FRAMES = config_data.get("MAX_FRAMES", 0)
+        cfg.MAX_RETRIES = config_data.get("MAX_RETRIES", 2)
+        cfg.SKIP_EXISTING = config_data.get("SKIP_EXISTING", True)
+        cfg.OUTPUT_SUFFIX = config_data.get("OUTPUT_SUFFIX", "")
+        cfg.FILE_SORTING = config_data.get("FILE_SORTING", "date_modified_newest")
+
+        cfg.PRELOAD_MODELS = config_data.get("PRELOAD_MODELS", False)
+        cfg.DRY_RUN = config_data.get("DRY_RUN", False)
+        cfg.PRINT_EFFECTIVE_CONFIG = config_data.get("PRINT_EFFECTIVE_CONFIG", False)
+        cfg.LOG_LEVEL = config_data.get("LOG_LEVEL", "WARNING").upper()
+
+        # Path validations (mirroring the checks in config.py)
+        if not cfg.FACE_NAME and cfg.ENABLE_SWAPPER:
+            raise ValueError("Source face is required when swapper is enabled.")
+        if not cfg.INPUT_PATH:
+            raise ValueError("Target input path is required.")
+
+        if cfg.ENABLE_SWAPPER and not os.path.isfile(cfg.SOURCE_FACE_PATH):
+            if cfg.FACE_SOURCE_IS_IMAGE:
+                raise FileNotFoundError(f"Source face image not found: {cfg.SOURCE_FACE_PATH}")
+            else:
+                raise FileNotFoundError(f"Source face model (.safetensors) not found: {cfg.SOURCE_FACE_PATH}")
+
+        if cfg.INPUT_SINGLE_FILE:
+            single_file_full = os.path.join(cfg.INPUT_PATH, cfg.INPUT_SINGLE_FILE)
+            if not os.path.isfile(single_file_full):
+                raise FileNotFoundError(f"Input file does not exist: {single_file_full}")
+        else:
+            if not os.path.isdir(cfg.INPUT_PATH):
+                raise FileNotFoundError(f"Input directory does not exist: {cfg.INPUT_PATH}")
+
+        if cfg.ENABLE_SWAPPER and not os.path.isfile(cfg.SWAPPER_MODEL):
+            raise FileNotFoundError(f"Swapper model not found: {cfg.SWAPPER_MODEL}")
+
+        if cfg.ENABLE_RESTORE and not os.path.isfile(cfg.RESTORE_MODEL_PATH):
+            raise FileNotFoundError(f"Restore model not found: {cfg.RESTORE_MODEL_PATH}")
+
+        if cfg.ENABLE_PARSER and not os.path.isfile(cfg.PARSER_MODEL):
+            raise FileNotFoundError(f"Parser model not found: {cfg.PARSER_MODEL}")
+
+        if not os.path.isfile(cfg.FFMPEG_CMD):
+            raise FileNotFoundError(f"ffmpeg executable not found: {cfg.FFMPEG_CMD}")
+
         run_config = build_run_config_from_cfg(cfg)
         runtime_ctx = RuntimeContext(config=run_config)
         
@@ -465,6 +491,7 @@ def run_pipeline_worker(config_data):
         with STATE_LOCK:
             STATE["status"] = "error"
             STATE["error_message"] = str(e)
+        log_error_to_file(f"Exception during pipeline execution: {e}", e)
     finally:
         with STATE_LOCK:
             if STATE["status"] == "running":

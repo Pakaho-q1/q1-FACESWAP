@@ -184,7 +184,8 @@ export default function App() {
       };
 
       // Always send start command to web server (keeps PC and mobile in 100% sync!)
-      const host = typeof window !== "undefined" ? window.location.hostname : "localhost";
+      const rawHost = typeof window !== "undefined" ? window.location.hostname : "127.0.0.1";
+      const host = (rawHost === "localhost" || rawHost === "tauri.localhost" || rawHost.endsWith(".localhost") || rawHost === "localhost.localdomain" || rawHost === "[::1]" || !rawHost) ? "127.0.0.1" : rawHost;
       const res = await fetch(`http://${host}:8234/api/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -198,7 +199,8 @@ export default function App() {
 
   const handleCancel = async () => {
     try {
-      const host = typeof window !== "undefined" ? window.location.hostname : "localhost";
+      const rawHost = typeof window !== "undefined" ? window.location.hostname : "127.0.0.1";
+      const host = (rawHost === "localhost" || rawHost === "tauri.localhost" || rawHost.endsWith(".localhost") || rawHost === "localhost.localdomain" || rawHost === "[::1]" || !rawHost) ? "127.0.0.1" : rawHost;
       const res = await fetch(`http://${host}:8234/api/cancel`, { method: "POST" });
       if (!res.ok) throw new Error("Failed to cancel job via web server");
       setStatus("idle");
