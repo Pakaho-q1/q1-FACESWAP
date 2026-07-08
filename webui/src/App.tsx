@@ -420,7 +420,7 @@ export default function App() {
   };
 
   return (
-    <div className="h-screen w-screen min-w-[900px] min-h-[600px] bg-slate-950 text-slate-100 font-sans flex flex-col overflow-auto">
+    <div className="h-screen w-screen bg-slate-950 text-slate-100 font-sans flex flex-col overflow-hidden">
       {/* Header */}
       <header className="h-14 border-b border-slate-900 bg-slate-950 px-6 flex justify-between items-center shrink-0">
         <div className="flex items-center gap-2.5">
@@ -440,7 +440,7 @@ export default function App() {
       {/* Main Container */}
       <div className="flex flex-1 overflow-hidden h-[calc(100vh-3.5rem)]">
         {/* Left Sidebar (fixed width, scrolling controls) */}
-        <aside className="w-80 min-w-[320px] border-r border-slate-900 bg-slate-900/40 flex flex-col h-full shrink-0 overflow-hidden">
+        <aside className="w-80 border-r border-slate-900 bg-slate-900/40 flex flex-col h-full shrink-0 overflow-hidden">
           <div className="flex-1 overflow-y-auto min-h-0 p-4 flex flex-col gap-5">
             {/* Common Inputs */}
             <div className="flex flex-col gap-3.5">
@@ -701,17 +701,17 @@ export default function App() {
               </div>
             </div>
 
-            <div className="border border-slate-900 rounded-xl overflow-hidden bg-slate-950/20 shrink-0">
+            <div className="border border-slate-900 rounded-xl overflow-hidden bg-slate-950/20">
               <button
                 onClick={() => setAdvancedOpen(!advancedOpen)}
-                className="w-full min-h-[44px] p-3 flex justify-between items-center text-xs font-bold text-slate-300 hover:bg-slate-900/50 transition-colors cursor-pointer"
+                className="w-full p-3 flex justify-between items-center text-xs font-bold text-slate-300 hover:bg-slate-900/50 transition-colors cursor-pointer"
               >
                 <span>Advanced Options</span>
                 <span className="text-slate-500">{advancedOpen ? "▼" : "▶"}</span>
               </button>
 
               {advancedOpen && (
-                <div className="p-4 border-t border-slate-900 flex flex-col gap-4 bg-slate-900/10">
+                <div className="p-4 border-t border-slate-900 flex flex-col gap-4.5 bg-slate-900/10">
                   {/* Performance / Tuner */}
                   <div className="flex flex-col gap-3">
                     <h4 className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Performance / Tuner</h4>
@@ -1037,10 +1037,10 @@ export default function App() {
             </div>
 
             {/* Tier 3: Developer collapsible panel */}
-            <div className="border border-slate-900 rounded-xl overflow-hidden bg-slate-950/20 mb-4 shrink-0">
+            <div className="border border-slate-900 rounded-xl overflow-hidden bg-slate-950/20 mb-4">
               <button
                 onClick={() => setDeveloperOpen(!developerOpen)}
-                className="w-full min-h-[44px] p-3 flex justify-between items-center text-xs font-bold text-slate-400 hover:bg-slate-900/50 transition-colors cursor-pointer"
+                className="w-full p-3 flex justify-between items-center text-xs font-bold text-slate-400 hover:bg-slate-900/50 transition-colors cursor-pointer"
               >
                 <span>Developer Options</span>
                 <span className="text-slate-600">{developerOpen ? "▼" : "▶"}</span>
