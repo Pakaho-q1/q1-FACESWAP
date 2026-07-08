@@ -68,7 +68,9 @@ source .venv/bin/activate  # Linux
 pip install -e .
 
 # Download model assets
-python scripts/download_models.py
+python scripts/download_models.py 
+# or
+python faceswap.py sync
 ```
 
 ### Download Pre-built GUI (Optional)
