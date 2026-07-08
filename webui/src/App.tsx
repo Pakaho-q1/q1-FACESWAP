@@ -44,12 +44,12 @@ export default function App() {
   const [format, setFormat] = useState("video");
   const [enableSwapper, setEnableSwapper] = useState(true);
   const [swaperWeigh, setSwaperWeigh] = useState(0.70);
-  
+
   const [enableRestore, setEnableRestore] = useState(true);
   const [restoreChoice, setRestoreChoice] = useState("1");
   const [restoreWeigh, setRestoreWeigh] = useState(0.70);
   const [restoreBlend, setRestoreBlend] = useState(0.70);
-  
+
   const [enableParser, setEnableParser] = useState(true);
 
   // Tier 2 - Advanced Options
@@ -89,6 +89,216 @@ export default function App() {
   const [dryRun, setDryRun] = useState(false);
   const [printEffectiveConfig, setPrintEffectiveConfig] = useState(false);
   const [logLevel, setLogLevel] = useState("warning");
+
+  // Load settings once at startup
+  useEffect(() => {
+    const saved = localStorage.getItem("q1_faceswap_settings");
+    if (saved) {
+      try {
+        const cfg = JSON.parse(saved);
+        if (cfg.inputFace !== undefined) setInputFace(cfg.inputFace);
+        if (cfg.inputTarget !== undefined) setInputTarget(cfg.inputTarget);
+        if (cfg.outputPath !== undefined) setOutputPath(cfg.outputPath);
+        if (cfg.format !== undefined) setFormat(cfg.format);
+        if (cfg.enableSwapper !== undefined) setEnableSwapper(cfg.enableSwapper);
+        if (cfg.swaperWeigh !== undefined) setSwaperWeigh(cfg.swaperWeigh);
+        if (cfg.enableRestore !== undefined) setEnableRestore(cfg.enableRestore);
+        if (cfg.restoreChoice !== undefined) setRestoreChoice(cfg.restoreChoice);
+        if (cfg.restoreWeigh !== undefined) setRestoreWeigh(cfg.restoreWeigh);
+        if (cfg.restoreBlend !== undefined) setRestoreBlend(cfg.restoreBlend);
+        if (cfg.enableParser !== undefined) setEnableParser(cfg.enableParser);
+        if (cfg.workersPerStage !== undefined) setWorkersPerStage(cfg.workersPerStage);
+        if (cfg.workerQueueSize !== undefined) setWorkerQueueSize(cfg.workerQueueSize);
+        if (cfg.outQueueSize !== undefined) setOutQueueSize(cfg.outQueueSize);
+        if (cfg.tunerMode !== undefined) setTunerMode(cfg.tunerMode);
+        if (cfg.gpuTargetUtil !== undefined) setGpuTargetUtil(cfg.gpuTargetUtil);
+        if (cfg.highWatermark !== undefined) setHighWatermark(cfg.highWatermark);
+        if (cfg.lowWatermark !== undefined) setLowWatermark(cfg.lowWatermark);
+        if (cfg.switchCooldown !== undefined) setSwitchCooldown(cfg.switchCooldown);
+        if (cfg.providerAll !== undefined) setProviderAll(cfg.providerAll);
+        if (cfg.providerSwaper !== undefined) setProviderSwaper(cfg.providerSwaper);
+        if (cfg.providerRestore !== undefined) setProviderRestore(cfg.providerRestore);
+        if (cfg.providerParser !== undefined) setProviderParser(cfg.providerParser);
+        if (cfg.providerDetect !== undefined) setProviderDetect(cfg.providerDetect);
+        if (cfg.preserveSwapEyes !== undefined) setPreserveSwapEyes(cfg.preserveSwapEyes);
+        if (cfg.parserMaskBlur !== undefined) setParserMaskBlur(cfg.parserMaskBlur);
+        if (cfg.maxFrames !== undefined) setMaxFrames(cfg.maxFrames);
+        if (cfg.maxRetries !== undefined) setMaxRetries(cfg.maxRetries);
+        if (cfg.skipExisting !== undefined) setSkipExisting(cfg.skipExisting);
+        if (cfg.outputSuffix !== undefined) setOutputSuffix(cfg.outputSuffix);
+        if (cfg.fileSorting !== undefined) setFileSorting(cfg.fileSorting);
+        if (cfg.projectPath !== undefined) setProjectPath(cfg.projectPath);
+        if (cfg.preloadModels !== undefined) setPreloadModels(cfg.preloadModels);
+        if (cfg.dryRun !== undefined) setDryRun(cfg.dryRun);
+        if (cfg.printEffectiveConfig !== undefined) setPrintEffectiveConfig(cfg.printEffectiveConfig);
+        if (cfg.logLevel !== undefined) setLogLevel(cfg.logLevel);
+      } catch (e) {
+        console.error("Failed to parse settings", e);
+      }
+    }
+  }, []);
+
+  // Save settings automatically on any change
+  useEffect(() => {
+    const cfg = {
+      inputFace,
+      inputTarget,
+      outputPath,
+      format,
+      enableSwapper,
+      swaperWeigh,
+      enableRestore,
+      restoreChoice,
+      restoreWeigh,
+      restoreBlend,
+      enableParser,
+      workersPerStage,
+      workerQueueSize,
+      outQueueSize,
+      tunerMode,
+      gpuTargetUtil,
+      highWatermark,
+      lowWatermark,
+      switchCooldown,
+      providerAll,
+      providerSwaper,
+      providerRestore,
+      providerParser,
+      providerDetect,
+      preserveSwapEyes,
+      parserMaskBlur,
+      maxFrames,
+      maxRetries,
+      skipExisting,
+      outputSuffix,
+      fileSorting,
+      projectPath,
+      preloadModels,
+      dryRun,
+      printEffectiveConfig,
+      logLevel,
+    };
+    localStorage.setItem("q1_faceswap_settings", JSON.stringify(cfg));
+  }, [
+    inputFace,
+    inputTarget,
+    outputPath,
+    format,
+    enableSwapper,
+    swaperWeigh,
+    enableRestore,
+    restoreChoice,
+    restoreWeigh,
+    restoreBlend,
+    enableParser,
+    workersPerStage,
+    workerQueueSize,
+    outQueueSize,
+    tunerMode,
+    gpuTargetUtil,
+    highWatermark,
+    lowWatermark,
+    switchCooldown,
+    providerAll,
+    providerSwaper,
+    providerRestore,
+    providerParser,
+    providerDetect,
+    preserveSwapEyes,
+    parserMaskBlur,
+    maxFrames,
+    maxRetries,
+    skipExisting,
+    outputSuffix,
+    fileSorting,
+    projectPath,
+    preloadModels,
+    dryRun,
+    printEffectiveConfig,
+    logLevel,
+  ]);
+
+  const handleResetDefaults = () => {
+    if (confirm("Reset all settings to default values?")) {
+      setInputFace("");
+      setInputTarget("");
+      setOutputPath("");
+      setFormat("video");
+      setEnableSwapper(true);
+      setSwaperWeigh(0.70);
+      setEnableRestore(true);
+      setRestoreChoice("1");
+      setRestoreWeigh(0.70);
+      setRestoreBlend(0.70);
+      setEnableParser(true);
+      setWorkersPerStage(8);
+      setWorkerQueueSize(64);
+      setOutQueueSize(128);
+      setTunerMode("auto");
+      setGpuTargetUtil(95);
+      setHighWatermark(12);
+      setLowWatermark(4);
+      setSwitchCooldown(0.35);
+      setProviderAll("trt");
+      setProviderSwaper("auto");
+      setProviderRestore("auto");
+      setProviderParser("auto");
+      setProviderDetect("auto");
+      setPreserveSwapEyes(true);
+      setParserMaskBlur(21);
+      setMaxFrames(0);
+      setMaxRetries(2);
+      setSkipExisting(true);
+      setOutputSuffix("");
+      setFileSorting("date_modified_newest");
+      setProjectPath("");
+      setPreloadModels(false);
+      setDryRun(false);
+      setPrintEffectiveConfig(false);
+      setLogLevel("warning");
+      localStorage.removeItem("q1_faceswap_settings");
+    }
+  };
+
+  const handleWebUpload = async (event: React.ChangeEvent<HTMLInputElement>, targetField: "face" | "target") => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const host = typeof window !== "undefined" ? window.location.hostname : "127.0.0.1";
+      const actualHost = (host === "localhost" || host === "tauri.localhost" || host.endsWith(".localhost") || host === "localhost.localdomain" || host === "[::1]" || !host) ? "127.0.0.1" : host;
+
+      const fileData = await file.arrayBuffer();
+      const res = await fetch(`http://${actualHost}:8234/api/upload?filename=${encodeURIComponent(file.name)}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/octet-stream"
+        },
+        body: fileData
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.path) {
+          if (targetField === "face") {
+            setInputFace(data.path);
+          } else {
+            setInputTarget(data.path);
+            const ext = file.name.substring(file.name.lastIndexOf(".")).toLowerCase();
+            if ([".mp4", ".mkv", ".avi", ".mov"].includes(ext)) {
+              setFormat("video");
+            } else {
+              setFormat("image");
+            }
+          }
+        }
+      } else {
+        alert("Upload failed");
+      }
+    } catch (err: any) {
+      alert(`Upload error: ${err?.message || err}`);
+    }
+  };
 
   // Pickers Handler
   const handleSelectFace = async () => {
@@ -210,7 +420,7 @@ export default function App() {
   };
 
   return (
-    <div className="h-screen w-screen bg-slate-950 text-slate-100 font-sans flex flex-col overflow-hidden">
+    <div className="h-screen w-screen min-w-[900px] min-h-[600px] bg-slate-950 text-slate-100 font-sans flex flex-col overflow-auto">
       {/* Header */}
       <header className="h-14 border-b border-slate-900 bg-slate-950 px-6 flex justify-between items-center shrink-0">
         <div className="flex items-center gap-2.5">
@@ -228,10 +438,10 @@ export default function App() {
       </header>
 
       {/* Main Container */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden h-[calc(100vh-3.5rem)]">
         {/* Left Sidebar (fixed width, scrolling controls) */}
-        <aside className="w-80 border-r border-slate-900 bg-slate-900/40 flex flex-col h-full shrink-0 overflow-hidden">
-          <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-5 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
+        <aside className="w-80 min-w-[320px] border-r border-slate-900 bg-slate-900/40 flex flex-col h-full shrink-0 overflow-hidden">
+          <div className="flex-1 overflow-y-auto min-h-0 p-4 flex flex-col gap-5">
             {/* Common Inputs */}
             <div className="flex flex-col gap-3.5">
               <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest border-b border-slate-900 pb-1">
@@ -260,6 +470,19 @@ export default function App() {
                         <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                       </svg>
                     </button>
+                  )}
+                  {!isTauri && (
+                    <label className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center justify-center shrink-0">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                      </svg>
+                      <input
+                        type="file"
+                        accept="image/*,.safetensors"
+                        className="hidden"
+                        onChange={(e) => handleWebUpload(e, "face")}
+                      />
+                    </label>
                   )}
                 </div>
               </div>
@@ -301,6 +524,19 @@ export default function App() {
                       </button>
                     </div>
                   )}
+                  {!isTauri && (
+                    <label className="p-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-all cursor-pointer flex items-center justify-center shrink-0">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                      </svg>
+                      <input
+                        type="file"
+                        accept="image/*,video/*"
+                        className="hidden"
+                        onChange={(e) => handleWebUpload(e, "target")}
+                      />
+                    </label>
+                  )}
                 </div>
               </div>
 
@@ -336,17 +572,15 @@ export default function App() {
                 <div className="flex bg-slate-950 border border-slate-800 rounded-lg p-[3px]">
                   <button
                     onClick={() => setFormat("video")}
-                    className={`flex-1 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
-                      format === "video" ? "bg-indigo-600 text-white" : "text-slate-500 hover:text-slate-300"
-                    }`}
+                    className={`flex-1 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${format === "video" ? "bg-indigo-600 text-white" : "text-slate-500 hover:text-slate-300"
+                      }`}
                   >
                     Video
                   </button>
                   <button
                     onClick={() => setFormat("image")}
-                    className={`flex-1 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
-                      format === "image" ? "bg-indigo-600 text-white" : "text-slate-500 hover:text-slate-300"
-                    }`}
+                    className={`flex-1 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${format === "image" ? "bg-indigo-600 text-white" : "text-slate-500 hover:text-slate-300"
+                      }`}
                   >
                     Image
                   </button>
@@ -467,22 +701,21 @@ export default function App() {
               </div>
             </div>
 
-            {!isTauri && (
-              <div className="border border-slate-900 rounded-xl overflow-hidden bg-slate-950/20">
+            <div className="border border-slate-900 rounded-xl overflow-hidden bg-slate-950/20 shrink-0">
               <button
                 onClick={() => setAdvancedOpen(!advancedOpen)}
-                className="w-full p-3 flex justify-between items-center text-xs font-bold text-slate-300 hover:bg-slate-900/50 transition-colors cursor-pointer"
+                className="w-full min-h-[44px] p-3 flex justify-between items-center text-xs font-bold text-slate-300 hover:bg-slate-900/50 transition-colors cursor-pointer"
               >
                 <span>Advanced Options</span>
                 <span className="text-slate-500">{advancedOpen ? "▼" : "▶"}</span>
               </button>
-              
+
               {advancedOpen && (
-                <div className="p-4 border-t border-slate-900 flex flex-col gap-4.5 bg-slate-900/10">
+                <div className="p-4 border-t border-slate-900 flex flex-col gap-4 bg-slate-900/10">
                   {/* Performance / Tuner */}
                   <div className="flex flex-col gap-3">
                     <h4 className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Performance / Tuner</h4>
-                    
+
                     <div className="flex flex-col gap-1">
                       <label className="text-[10px] text-slate-400">Workers per Stage</label>
                       <input
@@ -691,9 +924,8 @@ export default function App() {
                             const val = parseInt(e.target.value) || 21;
                             setParserMaskBlur(val);
                           }}
-                          className={`w-full bg-slate-950 border rounded-lg px-2 py-1 text-xs text-slate-200 ${
-                            parserMaskBlur % 2 === 0 ? "border-rose-500" : "border-slate-800"
-                          }`}
+                          className={`w-full bg-slate-950 border rounded-lg px-2 py-1 text-xs text-slate-200 ${parserMaskBlur % 2 === 0 ? "border-rose-500" : "border-slate-800"
+                            }`}
                         />
                       </div>
                     </div>
@@ -702,7 +934,7 @@ export default function App() {
                   {/* Run Behavior */}
                   <div className="flex flex-col gap-3">
                     <h4 className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Run Behavior</h4>
-                    
+
                     <div className="flex flex-col gap-1">
                       <label className="text-[10px] text-slate-400">Max Frames (0 = No limit)</label>
                       <input
@@ -803,14 +1035,12 @@ export default function App() {
                 </div>
               )}
             </div>
-          )}
 
-          {/* Tier 3: Developer collapsible panel */}
-          {!isTauri && (
-            <div className="border border-slate-900 rounded-xl overflow-hidden bg-slate-950/20 mb-4">
+            {/* Tier 3: Developer collapsible panel */}
+            <div className="border border-slate-900 rounded-xl overflow-hidden bg-slate-950/20 mb-4 shrink-0">
               <button
                 onClick={() => setDeveloperOpen(!developerOpen)}
-                className="w-full p-3 flex justify-between items-center text-xs font-bold text-slate-400 hover:bg-slate-900/50 transition-colors cursor-pointer"
+                className="w-full min-h-[44px] p-3 flex justify-between items-center text-xs font-bold text-slate-400 hover:bg-slate-900/50 transition-colors cursor-pointer"
               >
                 <span>Developer Options</span>
                 <span className="text-slate-600">{developerOpen ? "▼" : "▶"}</span>
@@ -853,38 +1083,44 @@ export default function App() {
                 </div>
               )}
             </div>
-          )}
-        </div>
+          </div>
 
           {/* Action Buttons (fixed at bottom of sidebar) */}
           <div className="p-4 bg-slate-950 border-t border-slate-900 flex gap-2 shrink-0">
             <button
               onClick={handleStart}
               disabled={status === "running"}
-              className={`flex-1 py-2.5 rounded-lg font-bold text-xs text-white tracking-wide transition-all shadow-md active:scale-[0.98] cursor-pointer ${
-                status === "running"
-                  ? "bg-slate-800 text-slate-500 cursor-not-allowed shadow-none border border-slate-700/50"
-                  : "bg-indigo-600 hover:bg-indigo-500"
-              }`}
+              className={`flex-1 py-2.5 rounded-lg font-bold text-xs text-white tracking-wide transition-all shadow-md active:scale-[0.98] cursor-pointer ${status === "running"
+                ? "bg-slate-800 text-slate-500 cursor-not-allowed shadow-none border border-slate-700/50"
+                : "bg-indigo-600 hover:bg-indigo-500"
+                }`}
             >
               Start Swap
             </button>
             <button
               onClick={handleCancel}
               disabled={status !== "running"}
-              className={`px-4 py-2.5 rounded-lg font-bold text-xs transition-all border active:scale-[0.98] cursor-pointer ${
-                status === "running"
-                  ? "bg-rose-950/20 text-rose-400 border-rose-900/60 hover:bg-rose-900/40 hover:text-white"
-                  : "bg-slate-950 text-slate-700 border-slate-900 cursor-not-allowed"
-              }`}
+              className={`px-4 py-2.5 rounded-lg font-bold text-xs transition-all border active:scale-[0.98] cursor-pointer ${status === "running"
+                ? "bg-rose-950/20 text-rose-400 border-rose-900/60 hover:bg-rose-900/40 hover:text-white"
+                : "bg-slate-950 text-slate-700 border-slate-900 cursor-not-allowed"
+                }`}
             >
               Cancel
+            </button>
+            <button
+              onClick={handleResetDefaults}
+              title="Reset Settings to Defaults"
+              className="px-3 py-2.5 rounded-lg bg-slate-950 border border-slate-900 text-slate-500 hover:text-slate-200 hover:bg-slate-900 hover:border-slate-800 transition-all cursor-pointer flex items-center justify-center shrink-0"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 8H18" />
+              </svg>
             </button>
           </div>
         </aside>
 
         {/* Right Panel (scrolling preview and output list) */}
-        <main className="flex-1 bg-slate-950 p-6 overflow-y-auto flex flex-col gap-6 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
+        <main className="flex-1 bg-slate-950 p-6 overflow-y-auto flex flex-col gap-6">
           {/* Swarm Engine Diagnostics Header */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl w-full flex flex-col sm:flex-row justify-between gap-4 text-xs">
             <div className="flex flex-col gap-1.5 flex-1 min-w-0">
@@ -915,7 +1151,7 @@ export default function App() {
                 <span className="text-slate-500 italic">Swarm Engine is offline. Start a job to activate metrics.</span>
               )}
             </div>
-            
+
             <div className="flex flex-col gap-1 sm:text-right shrink-0 border-t sm:border-t-0 sm:border-l border-slate-800 pt-2 sm:pt-0 sm:pl-4 min-w-[150px]">
               <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Processed Frames / Items</span>
               <span className="text-sm font-extrabold text-white">

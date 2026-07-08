@@ -250,6 +250,42 @@ class ApiRequestHandler(http.server.BaseHTTPRequestHandler):
             set_cors_headers(self)
             self.end_headers()
             self.wfile.write(json.dumps({"success": True}).encode("utf-8"))
+        elif path == "/api/upload":
+            content_length = int(self.headers.get("Content-Length", 0))
+            query = urllib.parse.parse_qs(parsed_url.query)
+            filenames = query.get("filename")
+            if not filenames:
+                self.send_response(400)
+                self.end_headers()
+                return
+
+            filename = filenames[0]
+            import core.config as cfg
+            input_dir = getattr(cfg, "INPUT_PATH", "")
+            if not input_dir or not os.path.isdir(input_dir):
+                from core.project_layout import build_layout
+                layout = build_layout(cfg.PROJECT_PATH)
+                input_dir = layout.input_dir
+                
+            os.makedirs(input_dir, exist_ok=True)
+            saved_path = os.path.join(input_dir, filename)
+            
+            try:
+                data = self.rfile.read(content_length)
+                with open(saved_path, "wb") as f:
+                    f.write(data)
+                
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                set_cors_headers(self)
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": True, "path": saved_path}).encode("utf-8"))
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                set_cors_headers(self)
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode("utf-8"))
         else:
             self.send_response(404)
             self.end_headers()
