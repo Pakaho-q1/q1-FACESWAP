@@ -1,0 +1,16 @@
+# Core Vision & Image Processing
+opencv-python>=4.8.0
+scikit-image>=0.21.0
+numpy<2.0.0
+# AI Models & Inference
+onnxruntime>=1.17.0
+insightface>=0.7.3
+safetensors>=0.4.0
+huggingface-hub>=0.20.0
+
+# GPU acceleration (install manually if CUDA available):
+# pip install onnxruntime-gpu>=1.17.0
+
+# System Monitoring & Utilities
+rich>=14.0.0
+nvidia-ml-py>=12.535.0
