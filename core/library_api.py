@@ -388,7 +388,8 @@ def run_cli() -> None:
         models_dir = cfg.MODELS_DIR
         all_filenames = [entry["filename"] for entry in manifest["models"]]
         
-        if getattr(parsed_args, "force", False):
+        force_sync = getattr(parsed_args, "force", False)
+        if force_sync:
             print("Force sync requested. Cleaning up existing model files...")
             for filename in all_filenames:
                 local_path = os.path.join(models_dir, filename)
@@ -407,10 +408,30 @@ def run_cli() -> None:
                 preload_models=True,
                 required_filenames=set(all_filenames)
             )
-            print("Sync completed successfully.")
+            print("Model sync completed successfully.")
         except Exception as exc:
-            print(f"Error during sync: {exc}")
+            print(f"Error during model sync: {exc}")
             sys.exit(1)
+
+        # Sync GUI binary if on Windows
+        if sys.platform == "win32":
+            gui_url = "https://github.com/Pakaho-q1/q1-FACESWAP/releases/download/1.0.0/gui.exe"
+            gui_dest_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "webui", "dist")
+            os.makedirs(gui_dest_dir, exist_ok=True)
+            gui_dest = os.path.join(gui_dest_dir, "gui.exe")
+            
+            print(f"Syncing pre-built GUI binary to {gui_dest}...")
+            try:
+                if force_sync or not os.path.isfile(gui_dest):
+                    # If force or doesn't exist, download
+                    cfg._download_file(gui_url, gui_dest)
+                    print("GUI binary synced successfully.")
+                else:
+                    print("GUI binary already exists. Use --force to redownload.")
+            except Exception as exc:
+                print(f"Warning: Failed to sync GUI binary: {exc}")
+        else:
+            print("Skipped GUI binary sync (GUI binary is only applicable on Windows).")
     elif command == "version":
         from core.version import __version__
         if getattr(parsed_args, "json", False):
