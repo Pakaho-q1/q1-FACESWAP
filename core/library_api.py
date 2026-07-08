@@ -415,7 +415,7 @@ def run_cli() -> None:
 
         # Sync GUI binary if on Windows
         if sys.platform == "win32":
-            gui_url = "https://github.com/Pakaho-q1/q1-FACESWAP/releases/download/1.0.0/gui.exe"
+            gui_url = "https://github.com/Pakaho-q1/q1-FACESWAP/releases/download/1.0.1/gui.exe"
             gui_dest_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "webui", "dist")
             os.makedirs(gui_dest_dir, exist_ok=True)
             gui_dest = os.path.join(gui_dest_dir, "gui.exe")
