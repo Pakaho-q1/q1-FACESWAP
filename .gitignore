@@ -14,7 +14,7 @@ __pycache__/
 **temp_audio/
 **settings.json
 **input/
-**output/
+output/
 .vscode/
 **/__pycache__/
 **/*.pyc
