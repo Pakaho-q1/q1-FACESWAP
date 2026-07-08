@@ -90,6 +90,8 @@ export default function App() {
   const [printEffectiveConfig, setPrintEffectiveConfig] = useState(false);
   const [logLevel, setLogLevel] = useState("warning");
 
+  const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
+
   // Load settings once at startup
   useEffect(() => {
     const saved = localStorage.getItem("q1_faceswap_settings");
@@ -136,10 +138,12 @@ export default function App() {
         console.error("Failed to parse settings", e);
       }
     }
+    setIsSettingsLoaded(true);
   }, []);
 
   // Save settings automatically on any change
   useEffect(() => {
+    if (!isSettingsLoaded) return;
     const cfg = {
       inputFace,
       inputTarget,
@@ -180,6 +184,7 @@ export default function App() {
     };
     localStorage.setItem("q1_faceswap_settings", JSON.stringify(cfg));
   }, [
+    isSettingsLoaded,
     inputFace,
     inputTarget,
     outputPath,
